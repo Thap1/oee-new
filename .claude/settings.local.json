@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Test-Path \"$env:USERPROFILE\\\\.claude.json\"; Test-Path \"$env:USERPROFILE\\\\.claude\\\\.claude.json\")",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(python3 /d/Project/oee-new/_bmad/scripts/resolve_customization.py --skill /d/Project/oee-new/.claude/skills/bmad-agent-dev --key agent)",
+      "Bash(python \"d:/Project/oee-new/_bmad/scripts/resolve_customization.py\" --skill \"d:/Project/oee-new/.claude/skills/bmad-agent-dev\" --key agent)",
+      "Bash(command -v uv)",
+      "Bash(command -v python)",
+      "Bash(command -v python3)"
+    ]
+  }
+}

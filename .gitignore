@@ -1,0 +1,16 @@
+# .NET
+bin/
+obj/
+*.user
+
+# Angular / Node
+web/**/node_modules/
+web/**/dist/
+web/**/.angular/
+web/**/coverage/
+
+# OS / IDE
+.vs/
+.vscode/*
+!.vscode/extensions.json
+*.suo
