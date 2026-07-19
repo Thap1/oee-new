@@ -1,0 +1,19 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "downtime": "Downtime",
+    "reports": "Reports",
+    "masterData": "Master Data",
+    "logout": "Logout"
+  },
+  "login": {
+    "username": "Username",
+    "password": "Password",
+    "submit": "Log in",
+    "invalidCredentials": "Invalid username or password",
+    "error": "Something went wrong. Please try again."
+  },
+  "placeholder": {
+    "comingLater": "This feature will be built in a later epic."
+  }
+}

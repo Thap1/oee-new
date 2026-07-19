@@ -1,0 +1,60 @@
+<div class="shell">
+  <header class="shell__topbar">
+    <div class="shell__brand">OEE</div>
+
+    <!-- Site/Line selector: full implementation (progressive disclosure, UX-DR3) lands in Story 1.6 -->
+    <div class="shell__site-selector-placeholder"></div>
+
+    <div class="shell__topbar-actions">
+      <button
+        type="button"
+        class="shell__lang-btn"
+        [class.shell__lang-btn--active]="currentLang() === 'vi'"
+        (click)="useLanguage('vi')"
+        data-testid="lang-vi"
+      >
+        VI
+      </button>
+      <button
+        type="button"
+        class="shell__lang-btn"
+        [class.shell__lang-btn--active]="currentLang() === 'en'"
+        (click)="useLanguage('en')"
+        data-testid="lang-en"
+      >
+        EN
+      </button>
+
+      <p-button
+        [label]="'nav.logout' | translate"
+        icon="pi pi-sign-out"
+        severity="secondary"
+        size="small"
+        (onClick)="logout()"
+        data-testid="logout-btn"
+      />
+    </div>
+  </header>
+
+  <div class="shell__body">
+    <nav class="shell__sidebar" data-testid="sidebar">
+      @for (item of menuItems(); track item.route) {
+        <a
+          [routerLink]="item.route"
+          routerLinkActive="shell__nav-item--active"
+          class="shell__nav-item"
+          [attr.data-testid]="'nav-' + item.route"
+        >
+          <i [class]="item.icon"></i>
+          <span>{{ item.labelKey | translate }}</span>
+        </a>
+      }
+    </nav>
+
+    <main class="shell__content">
+      <router-outlet />
+    </main>
+  </div>
+
+  <footer class="shell__footer">oee-new</footer>
+</div>

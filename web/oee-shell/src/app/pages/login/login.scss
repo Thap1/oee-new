@@ -1,0 +1,22 @@
+.login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+
+  &__card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 20rem;
+    padding: 2rem;
+    border: 1px solid var(--p-surface-200, #e5e7eb);
+    border-radius: 0.75rem;
+  }
+
+  &__error {
+    color: var(--p-red-500, #ef4444);
+    font-size: 0.875rem;
+    margin: 0;
+  }
+}

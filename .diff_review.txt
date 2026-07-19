@@ -1,0 +1,3094 @@
+diff --git a/OeeNew.slnx b/OeeNew.slnx
+new file mode 100644
+index 0000000..c2e70fd
+--- /dev/null
++++ b/OeeNew.slnx
+@@ -0,0 +1,14 @@
++<Solution>
++  <Folder Name="/src/">
++    <Project Path="src/OeeNew.Api/OeeNew.Api.csproj" />
++    <Project Path="src/OeeNew.Application/OeeNew.Application.csproj" />
++    <Project Path="src/OeeNew.Domain/OeeNew.Domain.csproj" />
++    <Project Path="src/OeeNew.Infrastructure/OeeNew.Infrastructure.csproj" />
++  </Folder>
++  <Folder Name="/tests/">
++    <Project Path="tests/OeeNew.Api.Tests/OeeNew.Api.Tests.csproj" />
++    <Project Path="tests/OeeNew.Application.Tests/OeeNew.Application.Tests.csproj" />
++    <Project Path="tests/OeeNew.Architecture.Tests/OeeNew.Architecture.Tests.csproj" />
++    <Project Path="tests/OeeNew.Domain.Tests/OeeNew.Domain.Tests.csproj" />
++  </Folder>
++</Solution>
+diff --git a/src/OeeNew.Api/Controllers/AuthController.cs b/src/OeeNew.Api/Controllers/AuthController.cs
+new file mode 100644
+index 0000000..462a0cc
+--- /dev/null
++++ b/src/OeeNew.Api/Controllers/AuthController.cs
+@@ -0,0 +1,40 @@
++using System.ComponentModel.DataAnnotations;
++using System.Security.Claims;
++using Microsoft.AspNetCore.Authorization;
++using Microsoft.AspNetCore.Mvc;
++using OeeNew.Application.Auth;
++
++namespace OeeNew.Api.Controllers;
++
++public sealed record LoginRequest([Required] string Username, [Required] string Password);
++
++public sealed record LoginResponse(string AccessToken, DateTimeOffset ExpiresAtUtc);
++
++public sealed record CurrentUserResponse(string UserId, string Username, string Role, IReadOnlyList<string> SiteIds, IReadOnlyList<string> LineIds);
++
++[ApiController]
++[Route("api/auth")]
++public sealed class AuthController(LoginUseCase loginUseCase) : ControllerBase
++{
++    [HttpPost("login")]
++    public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
++    {
++        var issued = await loginUseCase.ExecuteAsync(request.Username, request.Password, cancellationToken);
++        return Ok(new LoginResponse(issued.AccessToken, issued.ExpiresAtUtc));
++    }
++
++    /// <summary>Returns the caller's own claims — proves the JWT Bearer + envelope wiring end-to-end (AC1-3).</summary>
++    [HttpGet("me")]
++    [Authorize]
++    public ActionResult<CurrentUserResponse> Me()
++    {
++        var user = HttpContext.User;
++        var response = new CurrentUserResponse(
++            UserId: user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub") ?? string.Empty,
++            Username: user.FindFirstValue(ClaimTypes.Name) ?? user.FindFirstValue("unique_name") ?? string.Empty,
++            Role: user.FindFirstValue(OeeClaimTypes.Role) ?? string.Empty,
++            SiteIds: user.FindAll(OeeClaimTypes.SiteId).Select(c => c.Value).ToList(),
++            LineIds: user.FindAll(OeeClaimTypes.LineId).Select(c => c.Value).ToList());
++        return Ok(response);
++    }
++}
+diff --git a/src/OeeNew.Api/Errors/ApiErrorResponse.cs b/src/OeeNew.Api/Errors/ApiErrorResponse.cs
+new file mode 100644
+index 0000000..2fefc4c
+--- /dev/null
++++ b/src/OeeNew.Api/Errors/ApiErrorResponse.cs
+@@ -0,0 +1,11 @@
++using System.Text.Json.Serialization;
++
++namespace OeeNew.Api.Errors;
++
++/// <summary>Standard API error envelope (Architecture Spine — Consistency Conventions).</summary>
++public sealed class ApiErrorResponse
++{
++    [JsonPropertyName("code")] public required string Code { get; init; }
++    [JsonPropertyName("message")] public required string Message { get; init; }
++    [JsonPropertyName("details")] public object? Details { get; init; }
++}
+diff --git a/src/OeeNew.Api/Errors/ApiErrorWriter.cs b/src/OeeNew.Api/Errors/ApiErrorWriter.cs
+new file mode 100644
+index 0000000..370895e
+--- /dev/null
++++ b/src/OeeNew.Api/Errors/ApiErrorWriter.cs
+@@ -0,0 +1,13 @@
++namespace OeeNew.Api.Errors;
++
++/// <summary>Writes the standard error envelope directly to the response (used where the exception
++/// handler pipeline is bypassed, e.g. authentication challenges).</summary>
++public static class ApiErrorWriter
++{
++    public static Task WriteAsync(HttpContext context, int statusCode, string code, string message, object? details = null)
++    {
++        context.Response.StatusCode = statusCode;
++        context.Response.ContentType = "application/json";
++        return context.Response.WriteAsJsonAsync(new ApiErrorResponse { Code = code, Message = message, Details = details });
++    }
++}
+diff --git a/src/OeeNew.Api/Errors/ApiExceptionHandler.cs b/src/OeeNew.Api/Errors/ApiExceptionHandler.cs
+new file mode 100644
+index 0000000..f8b1129
+--- /dev/null
++++ b/src/OeeNew.Api/Errors/ApiExceptionHandler.cs
+@@ -0,0 +1,33 @@
++using Microsoft.AspNetCore.Diagnostics;
++using OeeNew.Application.Auth;
++
++namespace OeeNew.Api.Errors;
++
++/// <summary>
++/// Maps every unhandled exception to the standard error envelope `{ code, message, details? }`,
++/// never leaking raw .NET exception details (Architecture Spine — Consistency Conventions).
++/// </summary>
++public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : IExceptionHandler
++{
++    public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
++    {
++        var (statusCode, error) = Map(exception);
++
++        if (statusCode >= 500)
++        {
++            logger.LogError(exception, "Unhandled exception while processing {Path}", httpContext.Request.Path);
++        }
++
++        httpContext.Response.StatusCode = statusCode;
++        await httpContext.Response.WriteAsJsonAsync(error, cancellationToken);
++        return true;
++    }
++
++    private static (int StatusCode, ApiErrorResponse Error) Map(Exception exception) => exception switch
++    {
++        InvalidCredentialsException => (StatusCodes.Status401Unauthorized,
++            new ApiErrorResponse { Code = "INVALID_CREDENTIALS", Message = "Invalid username or password." }),
++        _ => (StatusCodes.Status500InternalServerError,
++            new ApiErrorResponse { Code = "INTERNAL_ERROR", Message = "An unexpected error occurred." }),
++    };
++}
+diff --git a/src/OeeNew.Api/OeeNew.Api.csproj b/src/OeeNew.Api/OeeNew.Api.csproj
+new file mode 100644
+index 0000000..df4ec8b
+--- /dev/null
++++ b/src/OeeNew.Api/OeeNew.Api.csproj
+@@ -0,0 +1,23 @@
++<Project Sdk="Microsoft.NET.Sdk.Web">
++
++  <PropertyGroup>
++    <TargetFramework>net10.0</TargetFramework>
++    <Nullable>enable</Nullable>
++    <ImplicitUsings>enable</ImplicitUsings>
++  </PropertyGroup>
++
++  <ItemGroup>
++    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
++    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
++    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
++      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
++      <PrivateAssets>all</PrivateAssets>
++    </PackageReference>
++  </ItemGroup>
++
++  <ItemGroup>
++    <ProjectReference Include="..\OeeNew.Application\OeeNew.Application.csproj" />
++    <ProjectReference Include="..\OeeNew.Infrastructure\OeeNew.Infrastructure.csproj" />
++  </ItemGroup>
++
++</Project>
+diff --git a/src/OeeNew.Api/OeeNew.Api.http b/src/OeeNew.Api/OeeNew.Api.http
+new file mode 100644
+index 0000000..5898841
+--- /dev/null
++++ b/src/OeeNew.Api/OeeNew.Api.http
+@@ -0,0 +1,6 @@
++@OeeNew.Api_HostAddress = http://localhost:5067
++
++GET {{OeeNew.Api_HostAddress}}/weatherforecast/
++Accept: application/json
++
++###
+diff --git a/src/OeeNew.Api/Program.cs b/src/OeeNew.Api/Program.cs
+new file mode 100644
+index 0000000..8841edc
+--- /dev/null
++++ b/src/OeeNew.Api/Program.cs
+@@ -0,0 +1,126 @@
++using System.Text.Json;
++using Microsoft.AspNetCore.Authentication.JwtBearer;
++using Microsoft.AspNetCore.Authorization;
++using Microsoft.AspNetCore.Mvc;
++using Microsoft.IdentityModel.Tokens;
++using OeeNew.Api.Errors;
++using OeeNew.Application.Auth;
++using OeeNew.Infrastructure.Identity;
++
++var builder = WebApplication.CreateBuilder(args);
++
++// AppMode: Site | Central (Architecture Spine AD-2) — same binary, different modules enabled.
++var appMode = builder.Configuration.GetValue<string>("AppMode") ?? "Site";
++builder.Services.AddSingleton(new AppModeInfo(appMode));
++
++builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
++builder.Services.Configure<BootstrapAdminOptions>(builder.Configuration.GetSection(BootstrapAdminOptions.SectionName));
++
++// Central Identity Provider (AD-7): signing keys + token issuance + credential validation.
++builder.Services.AddSingleton<IJwtSigningKeyProvider, RsaJwtSigningKeyProvider>();
++builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
++builder.Services.AddSingleton<IUserAuthenticator, BootstrapUserAuthenticator>();
++builder.Services.AddScoped<LoginUseCase>();
++
++builder.Services.AddControllers();
++builder.Services.AddOpenApi();
++
++builder.Services.Configure<ApiBehaviorOptions>(o =>
++{
++    // 400s from model binding/validation also use the standard error envelope.
++    o.InvalidModelStateResponseFactory = context =>
++    {
++        var details = context.ModelState
++            .Where(entry => entry.Value?.Errors.Count > 0)
++            .ToDictionary(
++                entry => entry.Key,
++                entry => entry.Value!.Errors.Select(e => e.ErrorMessage).ToArray());
++
++        return new BadRequestObjectResult(new ApiErrorResponse
++        {
++            Code = "VALIDATION_ERROR",
++            Message = "One or more fields are invalid.",
++            Details = details,
++        });
++    };
++});
++
++builder.Services.AddExceptionHandler<ApiExceptionHandler>();
++builder.Services.AddProblemDetails();
++
++builder.Services
++    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
++    .AddJwtBearer(options =>
++    {
++        var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
++
++        // Keep our own claim type names ("role", "site_id", "line_id") intact instead of the
++        // legacy WS-Federation remapping (e.g. "role" -> ClaimTypes.Role) applied when this is true.
++        options.MapInboundClaims = false;
++
++        options.TokenValidationParameters = new TokenValidationParameters
++        {
++            ValidateIssuer = true,
++            ValidIssuer = jwtOptions.Issuer,
++            ValidateAudience = true,
++            ValidAudience = jwtOptions.Audience,
++            ValidateLifetime = true,
++            RequireExpirationTime = true,
++            ValidateIssuerSigningKey = true,
++            ValidAlgorithms = [SecurityAlgorithms.RsaSha256],
++            // IssuerSigningKeyResolver is wired below via AddOptions<JwtBearerOptions>().Configure<IJwtSigningKeyProvider>,
++            // since it needs the live signing-key singleton (not yet resolvable at this point in the pipeline).
++        };
++
++        options.Events = new JwtBearerEvents
++        {
++            OnChallenge = context =>
++            {
++                context.HandleResponse();
++                return ApiErrorWriter.WriteAsync(context.HttpContext, StatusCodes.Status401Unauthorized,
++                    "UNAUTHORIZED", "Authentication is required to access this resource.");
++            },
++            OnForbidden = context =>
++                ApiErrorWriter.WriteAsync(context.HttpContext, StatusCodes.Status403Forbidden,
++                    "FORBIDDEN", "You do not have permission to access this resource."),
++        };
++    });
++
++// Resolve the JWKS-backed signing key resolver after the container is built, so it can pull the
++// live IJwtSigningKeyProvider singleton (current + previous key, AD-7) instead of a snapshot.
++builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
++    .Configure<IJwtSigningKeyProvider>((options, signingKeyProvider) =>
++    {
++        options.TokenValidationParameters.IssuerSigningKeyResolver = (_, _, kid, _) =>
++            signingKeyProvider.GetValidationKeys()
++                .Where(k => k.KeyId == kid)
++                .Select(k => (SecurityKey)new RsaSecurityKey(k.Rsa) { KeyId = k.KeyId });
++    });
++
++builder.Services.AddAuthorizationBuilder()
++    .AddPolicy("AdminOnly", policy => policy.RequireClaim(OeeClaimTypes.Role, "Admin"));
++
++var app = builder.Build();
++
++app.UseExceptionHandler(_ => { });
++
++if (app.Environment.IsDevelopment())
++{
++    app.MapOpenApi();
++}
++
++app.UseHttpsRedirection();
++
++app.UseAuthentication();
++app.UseAuthorization();
++
++app.MapControllers();
++
++app.MapGet("/.well-known/jwks.json", (IJwtSigningKeyProvider provider) =>
++    JwksDocumentBuilder.Build(provider.GetValidationKeys())).AllowAnonymous();
++
++app.Run();
++
++public sealed record AppModeInfo(string Mode);
++
++public partial class Program;
+diff --git a/src/OeeNew.Api/Properties/launchSettings.json b/src/OeeNew.Api/Properties/launchSettings.json
+new file mode 100644
+index 0000000..00ad9de
+--- /dev/null
++++ b/src/OeeNew.Api/Properties/launchSettings.json
+@@ -0,0 +1,23 @@
++﻿{
++  "$schema": "https://json.schemastore.org/launchsettings.json",
++  "profiles": {
++    "http": {
++      "commandName": "Project",
++      "dotnetRunMessages": true,
++      "launchBrowser": false,
++      "applicationUrl": "http://localhost:5067",
++      "environmentVariables": {
++        "ASPNETCORE_ENVIRONMENT": "Development"
++      }
++    },
++    "https": {
++      "commandName": "Project",
++      "dotnetRunMessages": true,
++      "launchBrowser": false,
++      "applicationUrl": "https://localhost:7049;http://localhost:5067",
++      "environmentVariables": {
++        "ASPNETCORE_ENVIRONMENT": "Development"
++      }
++    }
++  }
++}
+diff --git a/src/OeeNew.Api/appsettings.Development.json b/src/OeeNew.Api/appsettings.Development.json
+new file mode 100644
+index 0000000..0c208ae
+--- /dev/null
++++ b/src/OeeNew.Api/appsettings.Development.json
+@@ -0,0 +1,8 @@
++{
++  "Logging": {
++    "LogLevel": {
++      "Default": "Information",
++      "Microsoft.AspNetCore": "Warning"
++    }
++  }
++}
+diff --git a/src/OeeNew.Api/appsettings.json b/src/OeeNew.Api/appsettings.json
+new file mode 100644
+index 0000000..614135f
+--- /dev/null
++++ b/src/OeeNew.Api/appsettings.json
+@@ -0,0 +1,21 @@
++{
++  "Logging": {
++    "LogLevel": {
++      "Default": "Information",
++      "Microsoft.AspNetCore": "Warning"
++    }
++  },
++  "AllowedHosts": "*",
++  "AppMode": "Site",
++  "Jwt": {
++    "Issuer": "oee-new-central",
++    "Audience": "oee-new-api",
++    "AccessTokenLifetimeMinutes": 480
++  },
++  "BootstrapAdmin": {
++    "UserId": "00000000-0000-0000-0000-000000000001",
++    "Username": "admin",
++    "_comment_PasswordHash": "Dev-only bootstrap password is 'ChangeMe123!' — rotate/remove once Story 1.4 introduces real user management.",
++    "PasswordHash": "AQAAAAIAAYagAAAAEHtrgFN6kKVjykWwoTI5FcwJxi5vf9CSyu9A55AYAxuF5uNKFC1m5UO7Lc01KlISbw=="
++  }
++}
+diff --git a/src/OeeNew.Application/AssemblyMarker.cs b/src/OeeNew.Application/AssemblyMarker.cs
+new file mode 100644
+index 0000000..397edff
+--- /dev/null
++++ b/src/OeeNew.Application/AssemblyMarker.cs
+@@ -0,0 +1,6 @@
++namespace OeeNew.Application;
++
++/// <summary>Marker type used by architecture tests to locate this assembly.</summary>
++public sealed class AssemblyMarker
++{
++}
+diff --git a/src/OeeNew.Application/Auth/AuthenticatedUser.cs b/src/OeeNew.Application/Auth/AuthenticatedUser.cs
+new file mode 100644
+index 0000000..47264b1
+--- /dev/null
++++ b/src/OeeNew.Application/Auth/AuthenticatedUser.cs
+@@ -0,0 +1,12 @@
++namespace OeeNew.Application.Auth;
++
++/// <summary>
++/// Result of successfully validating credentials against the central Identity Provider (AD-7).
++/// SiteIds/LineIds are empty for a global Admin (AD-7: role claim is global, not site-scoped).
++/// </summary>
++public sealed record AuthenticatedUser(
++    Guid UserId,
++    string Username,
++    string Role,
++    IReadOnlyList<Guid> SiteIds,
++    IReadOnlyList<Guid> LineIds);
+diff --git a/src/OeeNew.Application/Auth/IJwtTokenService.cs b/src/OeeNew.Application/Auth/IJwtTokenService.cs
+new file mode 100644
+index 0000000..afe2055
+--- /dev/null
++++ b/src/OeeNew.Application/Auth/IJwtTokenService.cs
+@@ -0,0 +1,12 @@
++namespace OeeNew.Application.Auth;
++
++public sealed record IssuedToken(string AccessToken, DateTimeOffset ExpiresAtUtc);
++
++/// <summary>
++/// Issues signed JWTs carrying the `role` (global for Admin, AD-7) and `siteId`/`lineId` claims.
++/// Implemented in Infrastructure using the central Identity Provider's signing keys (JWKS, AD-7).
++/// </summary>
++public interface IJwtTokenService
++{
++    IssuedToken CreateToken(AuthenticatedUser user);
++}
+diff --git a/src/OeeNew.Application/Auth/IUserAuthenticator.cs b/src/OeeNew.Application/Auth/IUserAuthenticator.cs
+new file mode 100644
+index 0000000..ab9f2c7
+--- /dev/null
++++ b/src/OeeNew.Application/Auth/IUserAuthenticator.cs
+@@ -0,0 +1,12 @@
++namespace OeeNew.Application.Auth;
++
++/// <summary>
++/// Abstraction over the central Identity Provider's credential store (AD-7).
++/// Application depends only on this interface; Infrastructure supplies the implementation
++/// (EF Core + Postgres user store, once introduced by Story 1.4 — see BootstrapUserAuthenticator
++/// for the seam this story uses while no persisted User entity exists yet).
++/// </summary>
++public interface IUserAuthenticator
++{
++    Task<AuthenticatedUser?> ValidateCredentialsAsync(string username, string password, CancellationToken cancellationToken = default);
++}
+diff --git a/src/OeeNew.Application/Auth/InvalidCredentialsException.cs b/src/OeeNew.Application/Auth/InvalidCredentialsException.cs
+new file mode 100644
+index 0000000..7697173
+--- /dev/null
++++ b/src/OeeNew.Application/Auth/InvalidCredentialsException.cs
+@@ -0,0 +1,4 @@
++namespace OeeNew.Application.Auth;
++
++/// <summary>Thrown when login credentials do not match the central Identity Provider's records.</summary>
++public sealed class InvalidCredentialsException() : Exception("Invalid username or password.");
+diff --git a/src/OeeNew.Application/Auth/LoginUseCase.cs b/src/OeeNew.Application/Auth/LoginUseCase.cs
+new file mode 100644
+index 0000000..455cdf4
+--- /dev/null
++++ b/src/OeeNew.Application/Auth/LoginUseCase.cs
+@@ -0,0 +1,17 @@
++namespace OeeNew.Application.Auth;
++
++/// <summary>
++/// Orchestrates login: validate credentials via the central Identity Provider (AD-7),
++/// then issue a JWT carrying role + siteId/lineId claims. No direct EF Core/HTTP access here —
++/// only calls IUserAuthenticator / IJwtTokenService abstractions (AD-1).
++/// </summary>
++public sealed class LoginUseCase(IUserAuthenticator userAuthenticator, IJwtTokenService jwtTokenService)
++{
++    public async Task<IssuedToken> ExecuteAsync(string username, string password, CancellationToken cancellationToken = default)
++    {
++        var user = await userAuthenticator.ValidateCredentialsAsync(username, password, cancellationToken)
++            ?? throw new InvalidCredentialsException();
++
++        return jwtTokenService.CreateToken(user);
++    }
++}
+diff --git a/src/OeeNew.Application/Auth/OeeClaimTypes.cs b/src/OeeNew.Application/Auth/OeeClaimTypes.cs
+new file mode 100644
+index 0000000..2eef373
+--- /dev/null
++++ b/src/OeeNew.Application/Auth/OeeClaimTypes.cs
+@@ -0,0 +1,12 @@
++namespace OeeNew.Application.Auth;
++
++/// <summary>
++/// Custom JWT claim type names (AD-7). `Role` is a single value; `Admin` is global (no site/line
++/// claims). `SiteId`/`LineId` are repeated claims — one entry per Site/Line the user is scoped to.
++/// </summary>
++public static class OeeClaimTypes
++{
++    public const string Role = "role";
++    public const string SiteId = "site_id";
++    public const string LineId = "line_id";
++}
+diff --git a/src/OeeNew.Application/OeeNew.Application.csproj b/src/OeeNew.Application/OeeNew.Application.csproj
+new file mode 100644
+index 0000000..5367ff4
+--- /dev/null
++++ b/src/OeeNew.Application/OeeNew.Application.csproj
+@@ -0,0 +1,13 @@
++﻿<Project Sdk="Microsoft.NET.Sdk">
++
++  <ItemGroup>
++    <ProjectReference Include="..\OeeNew.Domain\OeeNew.Domain.csproj" />
++  </ItemGroup>
++
++  <PropertyGroup>
++    <TargetFramework>net10.0</TargetFramework>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++  </PropertyGroup>
++
++</Project>
+diff --git a/src/OeeNew.Domain/AssemblyMarker.cs b/src/OeeNew.Domain/AssemblyMarker.cs
+new file mode 100644
+index 0000000..fbbb552
+--- /dev/null
++++ b/src/OeeNew.Domain/AssemblyMarker.cs
+@@ -0,0 +1,6 @@
++namespace OeeNew.Domain;
++
++/// <summary>Marker type used by architecture tests to locate this assembly.</summary>
++public sealed class AssemblyMarker
++{
++}
+diff --git a/src/OeeNew.Domain/OeeNew.Domain.csproj b/src/OeeNew.Domain/OeeNew.Domain.csproj
+new file mode 100644
+index 0000000..b760144
+--- /dev/null
++++ b/src/OeeNew.Domain/OeeNew.Domain.csproj
+@@ -0,0 +1,9 @@
++﻿<Project Sdk="Microsoft.NET.Sdk">
++
++  <PropertyGroup>
++    <TargetFramework>net10.0</TargetFramework>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++  </PropertyGroup>
++
++</Project>
+diff --git a/src/OeeNew.Infrastructure/Identity/BootstrapAdminOptions.cs b/src/OeeNew.Infrastructure/Identity/BootstrapAdminOptions.cs
+new file mode 100644
+index 0000000..8f0eb10
+--- /dev/null
++++ b/src/OeeNew.Infrastructure/Identity/BootstrapAdminOptions.cs
+@@ -0,0 +1,19 @@
++namespace OeeNew.Infrastructure.Identity;
++
++/// <summary>
++/// Bound from configuration section "BootstrapAdmin". Holds the single Admin credential needed
++/// to log in before any user has been created via Story 1.4's user management. Story 1.4 replaces
++/// <see cref="BootstrapUserAuthenticator"/> with a persisted, multi-user implementation of
++/// IUserAuthenticator — this options class and its authenticator are a deliberately narrow seam,
++/// not a placeholder for a wider user schema.
++/// </summary>
++public sealed class BootstrapAdminOptions
++{
++    public const string SectionName = "BootstrapAdmin";
++
++    public Guid UserId { get; set; } = Guid.Empty;
++    public string Username { get; set; } = string.Empty;
++
++    /// <summary>PBKDF2 hash produced by ASP.NET Core's <see cref="Microsoft.AspNetCore.Identity.PasswordHasher{TUser}"/>.</summary>
++    public string PasswordHash { get; set; } = string.Empty;
++}
+diff --git a/src/OeeNew.Infrastructure/Identity/BootstrapUserAuthenticator.cs b/src/OeeNew.Infrastructure/Identity/BootstrapUserAuthenticator.cs
+new file mode 100644
+index 0000000..b50a1ed
+--- /dev/null
++++ b/src/OeeNew.Infrastructure/Identity/BootstrapUserAuthenticator.cs
+@@ -0,0 +1,37 @@
++using Microsoft.AspNetCore.Identity;
++using Microsoft.Extensions.Options;
++using OeeNew.Application.Auth;
++
++namespace OeeNew.Infrastructure.Identity;
++
++/// <summary>
++/// Validates credentials against a single configured Admin account (see BootstrapAdminOptions).
++/// Admin's SiteIds/LineIds are always empty — the `role` claim is global per AD-7, it does not
++/// carry a site/line scope. Story 1.4 introduces the persisted User entity + role-scoping and
++/// supersedes this class with a real multi-user IUserAuthenticator; nothing else in the codebase
++/// depends on this class directly (only on IUserAuthenticator), so that swap is a DI registration
++/// change, not a rewrite.
++/// </summary>
++public sealed class BootstrapUserAuthenticator(IOptions<BootstrapAdminOptions> options) : IUserAuthenticator
++{
++    private readonly IPasswordHasher<BootstrapUserAuthenticator> _hasher = new PasswordHasher<BootstrapUserAuthenticator>();
++
++    public Task<AuthenticatedUser?> ValidateCredentialsAsync(string username, string password, CancellationToken cancellationToken = default)
++    {
++        var admin = options.Value;
++
++        if (!string.Equals(username, admin.Username, StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(admin.PasswordHash))
++        {
++            return Task.FromResult<AuthenticatedUser?>(null);
++        }
++
++        var verification = _hasher.VerifyHashedPassword(this, admin.PasswordHash, password);
++        if (verification == PasswordVerificationResult.Failed)
++        {
++            return Task.FromResult<AuthenticatedUser?>(null);
++        }
++
++        var result = new AuthenticatedUser(admin.UserId, admin.Username, "Admin", SiteIds: [], LineIds: []);
++        return Task.FromResult<AuthenticatedUser?>(result);
++    }
++}
+diff --git a/src/OeeNew.Infrastructure/Identity/IJwtSigningKeyProvider.cs b/src/OeeNew.Infrastructure/Identity/IJwtSigningKeyProvider.cs
+new file mode 100644
+index 0000000..ec98287
+--- /dev/null
++++ b/src/OeeNew.Infrastructure/Identity/IJwtSigningKeyProvider.cs
+@@ -0,0 +1,21 @@
++namespace OeeNew.Infrastructure.Identity;
++
++/// <summary>
++/// Holds the central Identity Provider's signing keys (AD-7): the current key used to sign new
++/// tokens, plus at least the immediately previous key so tokens signed before a rotation remain
++/// valid until their own expiry ("overlap window").
++/// </summary>
++public interface IJwtSigningKeyProvider
++{
++    /// <summary>Current key used to sign newly issued tokens.</summary>
++    SigningKeyEntry GetSigningKey();
++
++    /// <summary>All keys accepted for validating incoming tokens (current + previous).</summary>
++    IReadOnlyList<SigningKeyEntry> GetValidationKeys();
++
++    /// <summary>
++    /// Rotates the signing key: current becomes previous, a new key becomes current.
++    /// Only the current + immediately previous key are retained (AD-7 minimum cache of 2).
++    /// </summary>
++    void RotateKey();
++}
+diff --git a/src/OeeNew.Infrastructure/Identity/JwksDocument.cs b/src/OeeNew.Infrastructure/Identity/JwksDocument.cs
+new file mode 100644
+index 0000000..bdba846
+--- /dev/null
++++ b/src/OeeNew.Infrastructure/Identity/JwksDocument.cs
+@@ -0,0 +1,18 @@
++using System.Text.Json.Serialization;
++
++namespace OeeNew.Infrastructure.Identity;
++
++public sealed class JwkDto
++{
++    [JsonPropertyName("kty")] public string KeyType { get; init; } = "RSA";
++    [JsonPropertyName("use")] public string Use { get; init; } = "sig";
++    [JsonPropertyName("alg")] public string Algorithm { get; init; } = "RS256";
++    [JsonPropertyName("kid")] public required string KeyId { get; init; }
++    [JsonPropertyName("n")] public required string Modulus { get; init; }
++    [JsonPropertyName("e")] public required string Exponent { get; init; }
++}
++
++public sealed class JwksDocument
++{
++    [JsonPropertyName("keys")] public required IReadOnlyList<JwkDto> Keys { get; init; }
++}
+diff --git a/src/OeeNew.Infrastructure/Identity/JwksDocumentBuilder.cs b/src/OeeNew.Infrastructure/Identity/JwksDocumentBuilder.cs
+new file mode 100644
+index 0000000..48a0fd4
+--- /dev/null
++++ b/src/OeeNew.Infrastructure/Identity/JwksDocumentBuilder.cs
+@@ -0,0 +1,24 @@
++using System.Buffers.Text;
++
++namespace OeeNew.Infrastructure.Identity;
++
++public static class JwksDocumentBuilder
++{
++    public static JwksDocument Build(IReadOnlyList<SigningKeyEntry> keys) => new()
++    {
++        Keys = keys.Select(ToJwk).ToList(),
++    };
++
++    private static JwkDto ToJwk(SigningKeyEntry key)
++    {
++        var parameters = key.Rsa.ExportParameters(includePrivateParameters: false);
++        return new JwkDto
++        {
++            KeyId = key.KeyId,
++            Modulus = Base64UrlEncode(parameters.Modulus!),
++            Exponent = Base64UrlEncode(parameters.Exponent!),
++        };
++    }
++
++    private static string Base64UrlEncode(byte[] bytes) => Base64Url.EncodeToString(bytes);
++}
+diff --git a/src/OeeNew.Infrastructure/Identity/JwtOptions.cs b/src/OeeNew.Infrastructure/Identity/JwtOptions.cs
+new file mode 100644
+index 0000000..be0d90b
+--- /dev/null
++++ b/src/OeeNew.Infrastructure/Identity/JwtOptions.cs
+@@ -0,0 +1,11 @@
++namespace OeeNew.Infrastructure.Identity;
++
++/// <summary>Bound from configuration section "Jwt".</summary>
++public sealed class JwtOptions
++{
++    public const string SectionName = "Jwt";
++
++    public string Issuer { get; set; } = "oee-new-central";
++    public string Audience { get; set; } = "oee-new-api";
++    public int AccessTokenLifetimeMinutes { get; set; } = 480;
++}
+diff --git a/src/OeeNew.Infrastructure/Identity/JwtTokenService.cs b/src/OeeNew.Infrastructure/Identity/JwtTokenService.cs
+new file mode 100644
+index 0000000..ead0acb
+--- /dev/null
++++ b/src/OeeNew.Infrastructure/Identity/JwtTokenService.cs
+@@ -0,0 +1,48 @@
++using System.IdentityModel.Tokens.Jwt;
++using System.Security.Claims;
++using Microsoft.Extensions.Options;
++using Microsoft.IdentityModel.Tokens;
++using OeeNew.Application.Auth;
++
++namespace OeeNew.Infrastructure.Identity;
++
++/// <summary>
++/// Issues JWTs signed by the central Identity Provider's current RSA key (AD-7).
++/// Embeds `kid` in the header so validators (this instance or a remote site, once Sync/JWKS
++/// fetch exists) can pick the matching public key from the JWKS document.
++/// </summary>
++public sealed class JwtTokenService(IJwtSigningKeyProvider signingKeyProvider, IOptions<JwtOptions> options) : IJwtTokenService
++{
++    public IssuedToken CreateToken(AuthenticatedUser user)
++    {
++        var jwtOptions = options.Value;
++        var signingKey = signingKeyProvider.GetSigningKey();
++        var now = DateTimeOffset.UtcNow;
++        var expires = now.AddMinutes(jwtOptions.AccessTokenLifetimeMinutes);
++
++        var claims = new List<Claim>
++        {
++            new(JwtRegisteredClaimNames.Sub, user.UserId.ToString()),
++            new(JwtRegisteredClaimNames.UniqueName, user.Username),
++            new(OeeClaimTypes.Role, user.Role),
++        };
++        claims.AddRange(user.SiteIds.Select(siteId => new Claim(OeeClaimTypes.SiteId, siteId.ToString())));
++        claims.AddRange(user.LineIds.Select(lineId => new Claim(OeeClaimTypes.LineId, lineId.ToString())));
++
++        var credentials = new SigningCredentials(new RsaSecurityKey(signingKey.Rsa) { KeyId = signingKey.KeyId }, SecurityAlgorithms.RsaSha256)
++        {
++            CryptoProviderFactory = new CryptoProviderFactory { CacheSignatureProviders = false },
++        };
++
++        var token = new JwtSecurityToken(
++            issuer: jwtOptions.Issuer,
++            audience: jwtOptions.Audience,
++            claims: claims,
++            notBefore: now.UtcDateTime,
++            expires: expires.UtcDateTime,
++            signingCredentials: credentials);
++
++        var accessToken = new JwtSecurityTokenHandler().WriteToken(token);
++        return new IssuedToken(accessToken, expires);
++    }
++}
+diff --git a/src/OeeNew.Infrastructure/Identity/RsaJwtSigningKeyProvider.cs b/src/OeeNew.Infrastructure/Identity/RsaJwtSigningKeyProvider.cs
+new file mode 100644
+index 0000000..34786bf
+--- /dev/null
++++ b/src/OeeNew.Infrastructure/Identity/RsaJwtSigningKeyProvider.cs
+@@ -0,0 +1,58 @@
++using System.Security.Cryptography;
++using System.Threading;
++
++namespace OeeNew.Infrastructure.Identity;
++
++/// <summary>
++/// In-process RSA key store for the central Identity Provider (AD-7).
++/// Thread-safe; keeps at most 2 keys (current + previous) as required by AD-7's
++/// "minimum 2 cached signing keys" rule so a rotation never invalidates in-flight tokens.
++/// </summary>
++public sealed class RsaJwtSigningKeyProvider : IJwtSigningKeyProvider, IDisposable
++{
++    private readonly Lock _lock = new();
++    private SigningKeyEntry _current;
++    private SigningKeyEntry? _previous;
++
++    public RsaJwtSigningKeyProvider()
++    {
++        _current = CreateKey();
++    }
++
++    public SigningKeyEntry GetSigningKey()
++    {
++        lock (_lock)
++        {
++            return _current;
++        }
++    }
++
++    public IReadOnlyList<SigningKeyEntry> GetValidationKeys()
++    {
++        lock (_lock)
++        {
++            return _previous is null ? [_current] : [_current, _previous];
++        }
++    }
++
++    public void RotateKey()
++    {
++        lock (_lock)
++        {
++            _previous?.Rsa.Dispose();
++            _previous = _current;
++            _current = CreateKey();
++        }
++    }
++
++    private static SigningKeyEntry CreateKey() => new(Guid.NewGuid().ToString("N"), RSA.Create(2048));
++
++    public void Dispose()
++    {
++        lock (_lock)
++        {
++            _current.Rsa.Dispose();
++            _previous?.Rsa.Dispose();
++        }
++    }
++}
+diff --git a/src/OeeNew.Infrastructure/Identity/SigningKeyEntry.cs b/src/OeeNew.Infrastructure/Identity/SigningKeyEntry.cs
+new file mode 100644
+index 0000000..6cb80e1
+--- /dev/null
++++ b/src/OeeNew.Infrastructure/Identity/SigningKeyEntry.cs
+@@ -0,0 +1,10 @@
++using System.Security.Cryptography;
++
++namespace OeeNew.Infrastructure.Identity;
++
++/// <summary>One RSA keypair identified by a `kid`, held by <see cref="IJwtSigningKeyProvider"/>.</summary>
++public sealed class SigningKeyEntry(string keyId, RSA rsa)
++{
++    public string KeyId { get; } = keyId;
++    public RSA Rsa { get; } = rsa;
++}
+diff --git a/src/OeeNew.Infrastructure/OeeNew.Infrastructure.csproj b/src/OeeNew.Infrastructure/OeeNew.Infrastructure.csproj
+new file mode 100644
+index 0000000..7fa2eed
+--- /dev/null
++++ b/src/OeeNew.Infrastructure/OeeNew.Infrastructure.csproj
+@@ -0,0 +1,22 @@
++﻿<Project Sdk="Microsoft.NET.Sdk">
++
++  <ItemGroup>
++    <ProjectReference Include="..\OeeNew.Application\OeeNew.Application.csproj" />
++    <ProjectReference Include="..\OeeNew.Domain\OeeNew.Domain.csproj" />
++  </ItemGroup>
++
++  <ItemGroup>
++    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.0" />
++    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
++    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.19.2" />
++    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
++    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.19.2" />
++  </ItemGroup>
++
++  <PropertyGroup>
++    <TargetFramework>net10.0</TargetFramework>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++  </PropertyGroup>
++
++</Project>
+diff --git a/tests/OeeNew.Api.Tests/AuthEndpointsTests.cs b/tests/OeeNew.Api.Tests/AuthEndpointsTests.cs
+new file mode 100644
+index 0000000..ef16837
+--- /dev/null
++++ b/tests/OeeNew.Api.Tests/AuthEndpointsTests.cs
+@@ -0,0 +1,119 @@
++using System.Net;
++using System.Net.Http.Json;
++using Microsoft.AspNetCore.Mvc.Testing;
++using Microsoft.Extensions.DependencyInjection;
++using OeeNew.Api.Errors;
++using OeeNew.Api.Controllers;
++using OeeNew.Infrastructure.Identity;
++using Xunit;
++
++namespace OeeNew.Api.Tests;
++
++public class AuthEndpointsTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
++{
++    private const string AdminUsername = "admin";
++    private const string AdminPassword = "ChangeMe123!"; // matches appsettings.json BootstrapAdmin.PasswordHash
++
++    [Fact]
++    public async Task Login_WithValidCredentials_ReturnsJwtWithRoleClaim()
++    {
++        var client = factory.CreateClient();
++
++        var response = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(AdminUsername, AdminPassword));
++
++        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
++        var body = await response.Content.ReadFromJsonAsync<LoginResponse>();
++        Assert.NotNull(body);
++        Assert.False(string.IsNullOrWhiteSpace(body!.AccessToken));
++    }
++
++    [Fact]
++    public async Task Login_WithWrongPassword_ReturnsEnvelopedUnauthorized()
++    {
++        var client = factory.CreateClient();
++
++        var response = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(AdminUsername, "wrong-password"));
++
++        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
++        var error = await response.Content.ReadFromJsonAsync<ApiErrorResponse>();
++        Assert.NotNull(error);
++        Assert.Equal("INVALID_CREDENTIALS", error!.Code);
++    }
++
++    [Fact]
++    public async Task Login_WithMissingUsername_ReturnsEnvelopedValidationError()
++    {
++        var client = factory.CreateClient();
++
++        var response = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest("", AdminPassword));
++
++        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
++        var error = await response.Content.ReadFromJsonAsync<ApiErrorResponse>();
++        Assert.NotNull(error);
++        Assert.Equal("VALIDATION_ERROR", error!.Code);
++    }
++
++    [Fact]
++    public async Task Me_WithoutToken_ReturnsEnvelopedUnauthorized()
++    {
++        var client = factory.CreateClient();
++
++        var response = await client.GetAsync("/api/auth/me");
++
++        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
++        var error = await response.Content.ReadFromJsonAsync<ApiErrorResponse>();
++        Assert.NotNull(error);
++        Assert.Equal("UNAUTHORIZED", error!.Code);
++    }
++
++    [Fact]
++    public async Task Me_WithValidToken_ReturnsClaims()
++    {
++        var client = factory.CreateClient();
++        var login = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(AdminUsername, AdminPassword));
++        var token = (await login.Content.ReadFromJsonAsync<LoginResponse>())!.AccessToken;
++
++        client.DefaultRequestHeaders.Authorization = new("Bearer", token);
++        var response = await client.GetAsync("/api/auth/me");
++
++        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
++        var me = await response.Content.ReadFromJsonAsync<CurrentUserResponse>();
++        Assert.NotNull(me);
++        Assert.Equal("Admin", me!.Role);
++        Assert.Empty(me.SiteIds);
++    }
++
++    [Fact]
++    public async Task Jwks_IsPubliclyAccessible_AndExposesCurrentKey()
++    {
++        var client = factory.CreateClient();
++
++        var response = await client.GetAsync("/.well-known/jwks.json");
++
++        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
++        var jwks = await response.Content.ReadFromJsonAsync<JwksDocument>();
++        Assert.NotNull(jwks);
++        Assert.NotEmpty(jwks!.Keys);
++    }
++
++    [Fact]
++    public async Task TokenIssuedBeforeRotation_StillAuthorizes_AfterKeyRotation()
++    {
++        // AC #3 end-to-end: rotate the central Identity Provider's signing key, then confirm a
++        // token issued *before* rotation is still accepted (overlap window via JWKS cache of 2 keys).
++        var client = factory.CreateClient();
++        var login = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(AdminUsername, AdminPassword));
++        var token = (await login.Content.ReadFromJsonAsync<LoginResponse>())!.AccessToken;
++
++        using (var scope = factory.Services.CreateScope())
++        {
++            var signingKeyProvider = scope.ServiceProvider.GetRequiredService<IJwtSigningKeyProvider>();
++            signingKeyProvider.RotateKey();
++        }
++
++        client.DefaultRequestHeaders.Authorization = new("Bearer", token);
++        var response = await client.GetAsync("/api/auth/me");
++
++        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
++    }
++}
+diff --git a/tests/OeeNew.Api.Tests/OeeNew.Api.Tests.csproj b/tests/OeeNew.Api.Tests/OeeNew.Api.Tests.csproj
+new file mode 100644
+index 0000000..e7e506e
+--- /dev/null
++++ b/tests/OeeNew.Api.Tests/OeeNew.Api.Tests.csproj
+@@ -0,0 +1,27 @@
++﻿<Project Sdk="Microsoft.NET.Sdk">
++
++  <PropertyGroup>
++    <TargetFramework>net10.0</TargetFramework>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++    <IsPackable>false</IsPackable>
++  </PropertyGroup>
++
++  <ItemGroup>
++    <PackageReference Include="coverlet.collector" Version="6.0.4" />
++    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.10" />
++    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
++    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
++    <PackageReference Include="xunit" Version="2.9.3" />
++    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
++  </ItemGroup>
++
++  <ItemGroup>
++    <Using Include="Xunit" />
++  </ItemGroup>
++
++  <ItemGroup>
++    <ProjectReference Include="..\..\src\OeeNew.Api\OeeNew.Api.csproj" />
++  </ItemGroup>
++
++</Project>
+\ No newline at end of file
+diff --git a/tests/OeeNew.Application.Tests/Auth/BootstrapUserAuthenticatorTests.cs b/tests/OeeNew.Application.Tests/Auth/BootstrapUserAuthenticatorTests.cs
+new file mode 100644
+index 0000000..d54be4d
+--- /dev/null
++++ b/tests/OeeNew.Application.Tests/Auth/BootstrapUserAuthenticatorTests.cs
+@@ -0,0 +1,56 @@
++using Microsoft.AspNetCore.Identity;
++using Microsoft.Extensions.Options;
++using OeeNew.Infrastructure.Identity;
++using Xunit;
++
++namespace OeeNew.Application.Tests.Auth;
++
++public class BootstrapUserAuthenticatorTests
++{
++    private static BootstrapUserAuthenticator CreateAuthenticator(out Guid adminId)
++    {
++        adminId = Guid.NewGuid();
++        var hasher = new PasswordHasher<BootstrapUserAuthenticator>();
++        var options = new BootstrapAdminOptions
++        {
++            UserId = adminId,
++            Username = "admin",
++            PasswordHash = hasher.HashPassword(null!, "ChangeMe123!"),
++        };
++        return new BootstrapUserAuthenticator(Options.Create(options));
++    }
++
++    [Fact]
++    public async Task ValidateCredentialsAsync_WithCorrectPassword_ReturnsGlobalAdmin()
++    {
++        var authenticator = CreateAuthenticator(out var adminId);
++
++        var result = await authenticator.ValidateCredentialsAsync("admin", "ChangeMe123!");
++
++        Assert.NotNull(result);
++        Assert.Equal(adminId, result!.UserId);
++        Assert.Equal("Admin", result.Role);
++        Assert.Empty(result.SiteIds);
++        Assert.Empty(result.LineIds);
++    }
++
++    [Fact]
++    public async Task ValidateCredentialsAsync_WithWrongPassword_ReturnsNull()
++    {
++        var authenticator = CreateAuthenticator(out _);
++
++        var result = await authenticator.ValidateCredentialsAsync("admin", "wrong-password");
++
++        Assert.Null(result);
++    }
++
++    [Fact]
++    public async Task ValidateCredentialsAsync_WithUnknownUsername_ReturnsNull()
++    {
++        var authenticator = CreateAuthenticator(out _);
++
++        var result = await authenticator.ValidateCredentialsAsync("someone-else", "ChangeMe123!");
++
++        Assert.Null(result);
++    }
++}
+diff --git a/tests/OeeNew.Application.Tests/Auth/JwksDocumentBuilderTests.cs b/tests/OeeNew.Application.Tests/Auth/JwksDocumentBuilderTests.cs
+new file mode 100644
+index 0000000..77a0df8
+--- /dev/null
++++ b/tests/OeeNew.Application.Tests/Auth/JwksDocumentBuilderTests.cs
+@@ -0,0 +1,28 @@
++using OeeNew.Infrastructure.Identity;
++using Xunit;
++
++namespace OeeNew.Application.Tests.Auth;
++
++public class JwksDocumentBuilderTests
++{
++    [Fact]
++    public void Build_ExposesOneJwkPerValidationKey_WithoutPrivateKeyMaterial()
++    {
++        using var provider = new RsaJwtSigningKeyProvider();
++        provider.RotateKey(); // now has current + previous => 2 keys
++
++        var document = JwksDocumentBuilder.Build(provider.GetValidationKeys());
++
++        Assert.Equal(2, document.Keys.Count);
++        foreach (var jwk in document.Keys)
++        {
++            Assert.Equal("RSA", jwk.KeyType);
++            Assert.Equal("RS256", jwk.Algorithm);
++            Assert.NotEmpty(jwk.Modulus);
++            Assert.NotEmpty(jwk.Exponent);
++        }
++
++        Assert.Equal(provider.GetValidationKeys().Select(k => k.KeyId).OrderBy(x => x),
++            document.Keys.Select(k => k.KeyId).OrderBy(x => x));
++    }
++}
+diff --git a/tests/OeeNew.Application.Tests/Auth/JwtTokenServiceTests.cs b/tests/OeeNew.Application.Tests/Auth/JwtTokenServiceTests.cs
+new file mode 100644
+index 0000000..4d523e0
+--- /dev/null
++++ b/tests/OeeNew.Application.Tests/Auth/JwtTokenServiceTests.cs
+@@ -0,0 +1,141 @@
++using System.IdentityModel.Tokens.Jwt;
++using Microsoft.Extensions.Options;
++using Microsoft.IdentityModel.Tokens;
++using OeeNew.Application.Auth;
++using OeeNew.Infrastructure.Identity;
++using Xunit;
++
++namespace OeeNew.Application.Tests.Auth;
++
++public class JwtTokenServiceTests
++{
++    private static readonly JwtOptions TestOptions = new()
++    {
++        Issuer = "test-issuer",
++        Audience = "test-audience",
++        AccessTokenLifetimeMinutes = 60,
++    };
++
++    private static (JwtTokenService Service, RsaJwtSigningKeyProvider Provider) CreateService()
++    {
++        var provider = new RsaJwtSigningKeyProvider();
++        var service = new JwtTokenService(provider, Options.Create(TestOptions));
++        return (service, provider);
++    }
++
++    [Fact]
++    public void CreateToken_IncludesRoleAndSiteLineClaims()
++    {
++        var (service, provider) = CreateService();
++        try
++        {
++            var user = new AuthenticatedUser(
++                Guid.NewGuid(), "operator1", "Operator",
++                SiteIds: [Guid.Parse("11111111-1111-1111-1111-111111111111")],
++                LineIds: [Guid.Parse("22222222-2222-2222-2222-222222222222"), Guid.Parse("33333333-3333-3333-3333-333333333333")]);
++
++            var issued = service.CreateToken(user);
++            var jwt = new JwtSecurityTokenHandler().ReadJwtToken(issued.AccessToken);
++
++            Assert.Equal("Operator", jwt.Claims.Single(c => c.Type == OeeClaimTypes.Role).Value);
++            Assert.Equal(["11111111-1111-1111-1111-111111111111"],
++                jwt.Claims.Where(c => c.Type == OeeClaimTypes.SiteId).Select(c => c.Value));
++            Assert.Equal(2, jwt.Claims.Count(c => c.Type == OeeClaimTypes.LineId));
++        }
++        finally
++        {
++            provider.Dispose();
++        }
++    }
++
++    [Fact]
++    public void CreateToken_ForAdmin_HasNoSiteOrLineClaims()
++    {
++        var (service, provider) = CreateService();
++        try
++        {
++            var admin = new AuthenticatedUser(Guid.NewGuid(), "admin", "Admin", SiteIds: [], LineIds: []);
++
++            var issued = service.CreateToken(admin);
++            var jwt = new JwtSecurityTokenHandler().ReadJwtToken(issued.AccessToken);
++
++            Assert.DoesNotContain(jwt.Claims, c => c.Type == OeeClaimTypes.SiteId);
++            Assert.DoesNotContain(jwt.Claims, c => c.Type == OeeClaimTypes.LineId);
++            Assert.Equal("Admin", jwt.Claims.Single(c => c.Type == OeeClaimTypes.Role).Value);
++        }
++        finally
++        {
++            provider.Dispose();
++        }
++    }
++
++    [Fact]
++    public void CreateToken_IsVerifiableWithProviderPublicKey_AndHasKidHeader()
++    {
++        var (service, provider) = CreateService();
++        try
++        {
++            var user = new AuthenticatedUser(Guid.NewGuid(), "admin", "Admin", SiteIds: [], LineIds: []);
++            var issued = service.CreateToken(user);
++
++            var handler = new JwtSecurityTokenHandler();
++            var currentKey = provider.GetSigningKey();
++
++            var principal = handler.ValidateToken(issued.AccessToken, new TokenValidationParameters
++            {
++                ValidateIssuer = true,
++                ValidIssuer = TestOptions.Issuer,
++                ValidateAudience = true,
++                ValidAudience = TestOptions.Audience,
++                ValidateLifetime = true,
++                IssuerSigningKey = new RsaSecurityKey(currentKey.Rsa) { KeyId = currentKey.KeyId },
++            }, out var validatedToken);
++
++            Assert.NotNull(principal.Identity);
++            Assert.Equal(currentKey.KeyId, ((JwtSecurityToken)validatedToken).Header.Kid);
++        }
++        finally
++        {
++            provider.Dispose();
++        }
++    }
++
++    [Fact]
++    public void TokenIssuedBeforeRotation_StillValidatesAfterRotation_UsingPreviousKey()
++    {
++        // AC #3: token signed by the key before rotation must still be accepted while it is
++        // within the provider's validation-key set (current + previous), i.e. the JWKS overlap window.
++        var (service, provider) = CreateService();
++        try
++        {
++            var user = new AuthenticatedUser(Guid.NewGuid(), "admin", "Admin", SiteIds: [], LineIds: []);
++            var issued = service.CreateToken(user);
++            var keyUsedToSign = provider.GetSigningKey();
++
++            provider.RotateKey();
++
++            var handler = new JwtSecurityTokenHandler();
++            var validationKeys = provider.GetValidationKeys()
++                .Select(k => (SecurityKey)new RsaSecurityKey(k.Rsa) { KeyId = k.KeyId })
++                .ToList();
++
++            Assert.Contains(validationKeys, k => k.KeyId == keyUsedToSign.KeyId);
++
++            var principal = handler.ValidateToken(issued.AccessToken, new TokenValidationParameters
++            {
++                ValidateIssuer = true,
++                ValidIssuer = TestOptions.Issuer,
++                ValidateAudience = true,
++                ValidAudience = TestOptions.Audience,
++                ValidateLifetime = true,
++                IssuerSigningKeys = validationKeys,
++            }, out _);
++
++            Assert.NotNull(principal.Identity);
++        }
++        finally
++        {
++            provider.Dispose();
++        }
++    }
++}
+diff --git a/tests/OeeNew.Application.Tests/Auth/LoginUseCaseTests.cs b/tests/OeeNew.Application.Tests/Auth/LoginUseCaseTests.cs
+new file mode 100644
+index 0000000..06ad9ef
+--- /dev/null
++++ b/tests/OeeNew.Application.Tests/Auth/LoginUseCaseTests.cs
+@@ -0,0 +1,45 @@
++using OeeNew.Application.Auth;
++using Xunit;
++
++namespace OeeNew.Application.Tests.Auth;
++
++public class LoginUseCaseTests
++{
++    private sealed class FakeUserAuthenticator(AuthenticatedUser? result) : IUserAuthenticator
++    {
++        public Task<AuthenticatedUser?> ValidateCredentialsAsync(string username, string password, CancellationToken cancellationToken = default)
++            => Task.FromResult(result);
++    }
++
++    private sealed class FakeJwtTokenService : IJwtTokenService
++    {
++        public AuthenticatedUser? LastUser { get; private set; }
++
++        public IssuedToken CreateToken(AuthenticatedUser user)
++        {
++            LastUser = user;
++            return new IssuedToken("fake-token", DateTimeOffset.UtcNow.AddHours(1));
++        }
++    }
++
++    [Fact]
++    public async Task ExecuteAsync_WithValidCredentials_IssuesToken()
++    {
++        var user = new AuthenticatedUser(Guid.NewGuid(), "admin", "Admin", SiteIds: [], LineIds: []);
++        var tokenService = new FakeJwtTokenService();
++        var useCase = new LoginUseCase(new FakeUserAuthenticator(user), tokenService);
++
++        var result = await useCase.ExecuteAsync("admin", "correct-password");
++
++        Assert.Equal("fake-token", result.AccessToken);
++        Assert.Equal(user, tokenService.LastUser);
++    }
++
++    [Fact]
++    public async Task ExecuteAsync_WithInvalidCredentials_ThrowsInvalidCredentialsException()
++    {
++        var useCase = new LoginUseCase(new FakeUserAuthenticator(null), new FakeJwtTokenService());
++
++        await Assert.ThrowsAsync<InvalidCredentialsException>(() => useCase.ExecuteAsync("admin", "wrong-password"));
++    }
++}
+diff --git a/tests/OeeNew.Application.Tests/Auth/RsaJwtSigningKeyProviderTests.cs b/tests/OeeNew.Application.Tests/Auth/RsaJwtSigningKeyProviderTests.cs
+new file mode 100644
+index 0000000..80614f0
+--- /dev/null
++++ b/tests/OeeNew.Application.Tests/Auth/RsaJwtSigningKeyProviderTests.cs
+@@ -0,0 +1,48 @@
++using OeeNew.Infrastructure.Identity;
++using Xunit;
++
++namespace OeeNew.Application.Tests.Auth;
++
++public class RsaJwtSigningKeyProviderTests
++{
++    [Fact]
++    public void GetValidationKeys_ReturnsOnlyCurrentKey_BeforeAnyRotation()
++    {
++        using var provider = new RsaJwtSigningKeyProvider();
++
++        var keys = provider.GetValidationKeys();
++
++        Assert.Single(keys);
++        Assert.Equal(provider.GetSigningKey().KeyId, keys[0].KeyId);
++    }
++
++    [Fact]
++    public void RotateKey_KeepsPreviousKeyValidatable_ForOverlapWindow()
++    {
++        using var provider = new RsaJwtSigningKeyProvider();
++        var keyBeforeRotation = provider.GetSigningKey();
++
++        provider.RotateKey();
++
++        var validationKeys = provider.GetValidationKeys();
++        Assert.Equal(2, validationKeys.Count);
++        Assert.Contains(validationKeys, k => k.KeyId == keyBeforeRotation.KeyId);
++        Assert.NotEqual(keyBeforeRotation.KeyId, provider.GetSigningKey().KeyId);
++    }
++
++    [Fact]
++    public void RotateKey_Twice_DropsOldestKey_KeepingOnlyTwo()
++    {
++        using var provider = new RsaJwtSigningKeyProvider();
++        var firstKey = provider.GetSigningKey();
++
++        provider.RotateKey();
++        var secondKey = provider.GetSigningKey();
++        provider.RotateKey();
++
++        var validationKeys = provider.GetValidationKeys();
++        Assert.Equal(2, validationKeys.Count);
++        Assert.DoesNotContain(validationKeys, k => k.KeyId == firstKey.KeyId);
++        Assert.Contains(validationKeys, k => k.KeyId == secondKey.KeyId);
++    }
++}
+diff --git a/tests/OeeNew.Application.Tests/OeeNew.Application.Tests.csproj b/tests/OeeNew.Application.Tests/OeeNew.Application.Tests.csproj
+new file mode 100644
+index 0000000..5478341
+--- /dev/null
++++ b/tests/OeeNew.Application.Tests/OeeNew.Application.Tests.csproj
+@@ -0,0 +1,26 @@
++﻿<Project Sdk="Microsoft.NET.Sdk">
++
++  <PropertyGroup>
++    <TargetFramework>net10.0</TargetFramework>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++    <IsPackable>false</IsPackable>
++  </PropertyGroup>
++
++  <ItemGroup>
++    <PackageReference Include="coverlet.collector" Version="6.0.4" />
++    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
++    <PackageReference Include="xunit" Version="2.9.3" />
++    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
++  </ItemGroup>
++
++  <ItemGroup>
++    <Using Include="Xunit" />
++  </ItemGroup>
++
++  <ItemGroup>
++    <ProjectReference Include="..\..\src\OeeNew.Application\OeeNew.Application.csproj" />
++    <ProjectReference Include="..\..\src\OeeNew.Infrastructure\OeeNew.Infrastructure.csproj" />
++  </ItemGroup>
++
++</Project>
+\ No newline at end of file
+diff --git a/tests/OeeNew.Architecture.Tests/LayerDependencyTests.cs b/tests/OeeNew.Architecture.Tests/LayerDependencyTests.cs
+new file mode 100644
+index 0000000..28ef9e9
+--- /dev/null
++++ b/tests/OeeNew.Architecture.Tests/LayerDependencyTests.cs
+@@ -0,0 +1,47 @@
++using NetArchTest.Rules;
++using Xunit;
++
++namespace OeeNew.Architecture.Tests;
++
++/// <summary>
++/// Enforces AD-1 (Architecture Spine): Domain has no outward dependency,
++/// Application only depends on Domain (+ its own interfaces), never directly on Infrastructure or Api.
++/// </summary>
++public class LayerDependencyTests
++{
++    private const string DomainNamespace = "OeeNew.Domain";
++    private const string ApplicationNamespace = "OeeNew.Application";
++    private const string InfrastructureNamespace = "OeeNew.Infrastructure";
++    private const string ApiNamespace = "OeeNew.Api";
++
++    [Fact]
++    public void Domain_Should_Not_Depend_On_Infrastructure_Or_Api()
++    {
++        var result = Types.InAssembly(typeof(OeeNew.Domain.AssemblyMarker).Assembly)
++            .That()
++            .ResideInNamespace(DomainNamespace)
++            .ShouldNot()
++            .HaveDependencyOnAny(InfrastructureNamespace, ApiNamespace)
++            .GetResult();
++
++        Assert.True(result.IsSuccessful, FailureMessage(result));
++    }
++
++    [Fact]
++    public void Application_Should_Not_Depend_On_Infrastructure_Or_Api()
++    {
++        var result = Types.InAssembly(typeof(OeeNew.Application.AssemblyMarker).Assembly)
++            .That()
++            .ResideInNamespace(ApplicationNamespace)
++            .ShouldNot()
++            .HaveDependencyOnAny(InfrastructureNamespace, ApiNamespace)
++            .GetResult();
++
++        Assert.True(result.IsSuccessful, FailureMessage(result));
++    }
++
++    private static string FailureMessage(TestResult result) =>
++        result.IsSuccessful
++            ? string.Empty
++            : "Violating types: " + string.Join(", ", result.FailingTypes ?? []);
++}
+diff --git a/tests/OeeNew.Architecture.Tests/OeeNew.Architecture.Tests.csproj b/tests/OeeNew.Architecture.Tests/OeeNew.Architecture.Tests.csproj
+new file mode 100644
+index 0000000..0128a0c
+--- /dev/null
++++ b/tests/OeeNew.Architecture.Tests/OeeNew.Architecture.Tests.csproj
+@@ -0,0 +1,29 @@
++﻿<Project Sdk="Microsoft.NET.Sdk">
++
++  <PropertyGroup>
++    <TargetFramework>net10.0</TargetFramework>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++    <IsPackable>false</IsPackable>
++  </PropertyGroup>
++
++  <ItemGroup>
++    <PackageReference Include="coverlet.collector" Version="6.0.4" />
++    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
++    <PackageReference Include="NetArchTest.Rules" Version="1.3.2" />
++    <PackageReference Include="xunit" Version="2.9.3" />
++    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
++  </ItemGroup>
++
++  <ItemGroup>
++    <Using Include="Xunit" />
++  </ItemGroup>
++
++  <ItemGroup>
++    <ProjectReference Include="..\..\src\OeeNew.Domain\OeeNew.Domain.csproj" />
++    <ProjectReference Include="..\..\src\OeeNew.Application\OeeNew.Application.csproj" />
++    <ProjectReference Include="..\..\src\OeeNew.Infrastructure\OeeNew.Infrastructure.csproj" />
++    <ProjectReference Include="..\..\src\OeeNew.Api\OeeNew.Api.csproj" />
++  </ItemGroup>
++
++</Project>
+\ No newline at end of file
+diff --git a/tests/OeeNew.Domain.Tests/OeeNew.Domain.Tests.csproj b/tests/OeeNew.Domain.Tests/OeeNew.Domain.Tests.csproj
+new file mode 100644
+index 0000000..2a5bf16
+--- /dev/null
++++ b/tests/OeeNew.Domain.Tests/OeeNew.Domain.Tests.csproj
+@@ -0,0 +1,25 @@
++﻿<Project Sdk="Microsoft.NET.Sdk">
++
++  <PropertyGroup>
++    <TargetFramework>net10.0</TargetFramework>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++    <IsPackable>false</IsPackable>
++  </PropertyGroup>
++
++  <ItemGroup>
++    <PackageReference Include="coverlet.collector" Version="6.0.4" />
++    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
++    <PackageReference Include="xunit" Version="2.9.3" />
++    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
++  </ItemGroup>
++
++  <ItemGroup>
++    <Using Include="Xunit" />
++  </ItemGroup>
++
++  <ItemGroup>
++    <ProjectReference Include="..\..\src\OeeNew.Domain\OeeNew.Domain.csproj" />
++  </ItemGroup>
++
++</Project>
+\ No newline at end of file
+diff --git a/web/oee-shell/.editorconfig b/web/oee-shell/.editorconfig
+new file mode 100644
+index 0000000..f166060
+--- /dev/null
++++ b/web/oee-shell/.editorconfig
+@@ -0,0 +1,17 @@
++# Editor configuration, see https://editorconfig.org
++root = true
++
++[*]
++charset = utf-8
++indent_style = space
++indent_size = 2
++insert_final_newline = true
++trim_trailing_whitespace = true
++
++[*.ts]
++quote_type = single
++ij_typescript_use_double_quotes = false
++
++[*.md]
++max_line_length = off
++trim_trailing_whitespace = false
+diff --git a/web/oee-shell/.gitignore b/web/oee-shell/.gitignore
+new file mode 100644
+index 0000000..854acd5
+--- /dev/null
++++ b/web/oee-shell/.gitignore
+@@ -0,0 +1,44 @@
++# See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
++
++# Compiled output
++/dist
++/tmp
++/out-tsc
++/bazel-out
++
++# Node
++/node_modules
++npm-debug.log
++yarn-error.log
++
++# IDEs and editors
++.idea/
++.project
++.classpath
++.c9/
++*.launch
++.settings/
++*.sublime-workspace
++
++# Visual Studio Code
++.vscode/*
++!.vscode/settings.json
++!.vscode/tasks.json
++!.vscode/launch.json
++!.vscode/extensions.json
++!.vscode/mcp.json
++.history/*
++
++# Miscellaneous
++/.angular/cache
++.sass-cache/
++/connect.lock
++/coverage
++/libpeerconnection.log
++testem.log
++/typings
++__screenshots__/
++
++# System files
++.DS_Store
++Thumbs.db
+diff --git a/web/oee-shell/.prettierrc b/web/oee-shell/.prettierrc
+new file mode 100644
+index 0000000..d6c16d7
+--- /dev/null
++++ b/web/oee-shell/.prettierrc
+@@ -0,0 +1,12 @@
++{
++  "printWidth": 100,
++  "singleQuote": true,
++  "overrides": [
++    {
++      "files": "*.html",
++      "options": {
++        "parser": "angular"
++      }
++    }
++  ]
++}
+diff --git a/web/oee-shell/.vscode/extensions.json b/web/oee-shell/.vscode/extensions.json
+new file mode 100644
+index 0000000..77b3745
+--- /dev/null
++++ b/web/oee-shell/.vscode/extensions.json
+@@ -0,0 +1,4 @@
++{
++  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=827846
++  "recommendations": ["angular.ng-template"]
++}
+diff --git a/web/oee-shell/.vscode/launch.json b/web/oee-shell/.vscode/launch.json
+new file mode 100644
+index 0000000..925af83
+--- /dev/null
++++ b/web/oee-shell/.vscode/launch.json
+@@ -0,0 +1,20 @@
++{
++  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
++  "version": "0.2.0",
++  "configurations": [
++    {
++      "name": "ng serve",
++      "type": "chrome",
++      "request": "launch",
++      "preLaunchTask": "npm: start",
++      "url": "http://localhost:4200/"
++    },
++    {
++      "name": "ng test",
++      "type": "chrome",
++      "request": "launch",
++      "preLaunchTask": "npm: test",
++      "url": "http://localhost:9876/debug.html"
++    }
++  ]
++}
+diff --git a/web/oee-shell/.vscode/mcp.json b/web/oee-shell/.vscode/mcp.json
+new file mode 100644
+index 0000000..956af8c
+--- /dev/null
++++ b/web/oee-shell/.vscode/mcp.json
+@@ -0,0 +1,9 @@
++{
++  // For more information, visit: https://angular.dev/ai/mcp
++  "servers": {
++    "angular-cli": {
++      "command": "npx",
++      "args": ["-y", "@angular/cli", "mcp"]
++    }
++  }
++}
+diff --git a/web/oee-shell/.vscode/tasks.json b/web/oee-shell/.vscode/tasks.json
+new file mode 100644
+index 0000000..244306f
+--- /dev/null
++++ b/web/oee-shell/.vscode/tasks.json
+@@ -0,0 +1,42 @@
++{
++  // For more information, visit: https://go.microsoft.com/fwlink/?LinkId=733558
++  "version": "2.0.0",
++  "tasks": [
++    {
++      "type": "npm",
++      "script": "start",
++      "isBackground": true,
++      "problemMatcher": {
++        "owner": "typescript",
++        "pattern": "$tsc",
++        "background": {
++          "activeOnStart": true,
++          "beginsPattern": {
++            "regexp": "Changes detected"
++          },
++          "endsPattern": {
++            "regexp": "bundle generation (complete|failed)"
++          }
++        }
++      }
++    },
++    {
++      "type": "npm",
++      "script": "test",
++      "isBackground": true,
++      "problemMatcher": {
++        "owner": "typescript",
++        "pattern": "$tsc",
++        "background": {
++          "activeOnStart": true,
++          "beginsPattern": {
++            "regexp": "Changes detected"
++          },
++          "endsPattern": {
++            "regexp": "bundle generation (complete|failed)"
++          }
++        }
++      }
++    }
++  ]
++}
+diff --git a/web/oee-shell/README.md b/web/oee-shell/README.md
+new file mode 100644
+index 0000000..ea7ec07
+--- /dev/null
++++ b/web/oee-shell/README.md
+@@ -0,0 +1,59 @@
++# OeeShell
++
++This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.19.
++
++## Development server
++
++To start a local development server, run:
++
++```bash
++ng serve
++```
++
++Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
++
++## Code scaffolding
++
++Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
++
++```bash
++ng generate component component-name
++```
++
++For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
++
++```bash
++ng generate --help
++```
++
++## Building
++
++To build the project run:
++
++```bash
++ng build
++```
++
++This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
++
++## Running unit tests
++
++To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
++
++```bash
++ng test
++```
++
++## Running end-to-end tests
++
++For end-to-end (e2e) testing, run:
++
++```bash
++ng e2e
++```
++
++Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
++
++## Additional Resources
++
++For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+diff --git a/web/oee-shell/angular.json b/web/oee-shell/angular.json
+new file mode 100644
+index 0000000..b0b1492
+--- /dev/null
++++ b/web/oee-shell/angular.json
+@@ -0,0 +1,81 @@
++{
++  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
++  "version": 1,
++  "cli": {
++    "packageManager": "npm"
++  },
++  "newProjectRoot": "projects",
++  "projects": {
++    "oee-shell": {
++      "projectType": "application",
++      "schematics": {
++        "@schematics/angular:component": {
++          "style": "scss"
++        }
++      },
++      "root": "",
++      "sourceRoot": "src",
++      "prefix": "app",
++      "architect": {
++        "build": {
++          "builder": "@angular/build:application",
++          "options": {
++            "browser": "src/main.ts",
++            "tsConfig": "tsconfig.app.json",
++            "inlineStyleLanguage": "scss",
++            "assets": [
++              {
++                "glob": "**/*",
++                "input": "public"
++              }
++            ],
++            "styles": [
++              "src/styles.scss"
++            ]
++          },
++          "configurations": {
++            "production": {
++              "budgets": [
++                {
++                  "type": "initial",
++                  "maximumWarning": "700kB",
++                  "maximumError": "1MB"
++                },
++                {
++                  "type": "anyComponentStyle",
++                  "maximumWarning": "4kB",
++                  "maximumError": "8kB"
++                }
++              ],
++              "outputHashing": "all"
++            },
++            "development": {
++              "optimization": false,
++              "extractLicenses": false,
++              "sourceMap": true
++            }
++          },
++          "defaultConfiguration": "production"
++        },
++        "serve": {
++          "builder": "@angular/build:dev-server",
++          "options": {
++            "proxyConfig": "proxy.conf.json"
++          },
++          "configurations": {
++            "production": {
++              "buildTarget": "oee-shell:build:production"
++            },
++            "development": {
++              "buildTarget": "oee-shell:build:development"
++            }
++          },
++          "defaultConfiguration": "development"
++        },
++        "test": {
++          "builder": "@angular/build:unit-test"
++        }
++      }
++    }
++  }
++}
+diff --git a/web/oee-shell/package.json b/web/oee-shell/package.json
+new file mode 100644
+index 0000000..e9114b3
+--- /dev/null
++++ b/web/oee-shell/package.json
+@@ -0,0 +1,36 @@
++{
++  "name": "oee-shell",
++  "version": "0.0.0",
++  "scripts": {
++    "ng": "ng",
++    "start": "ng serve",
++    "build": "ng build",
++    "watch": "ng build --watch --configuration development",
++    "test": "ng test"
++  },
++  "private": true,
++  "packageManager": "npm@11.16.0",
++  "dependencies": {
++    "@angular/common": "^21.2.0",
++    "@angular/compiler": "^21.2.0",
++    "@angular/core": "^21.2.0",
++    "@angular/forms": "^21.2.0",
++    "@angular/platform-browser": "^21.2.0",
++    "@angular/router": "^21.2.0",
++    "@ngx-translate/core": "^18.0.0",
++    "@primeuix/themes": "^3.0.0",
++    "primeicons": "^8.0.0",
++    "primeng": "^21.1.9",
++    "rxjs": "~7.8.0",
++    "tslib": "^2.3.0"
++  },
++  "devDependencies": {
++    "@angular/build": "^21.2.19",
++    "@angular/cli": "^21.2.19",
++    "@angular/compiler-cli": "^21.2.0",
++    "jsdom": "^28.0.0",
++    "prettier": "^3.8.1",
++    "typescript": "~5.9.2",
++    "vitest": "^4.0.8"
++  }
++}
+diff --git a/web/oee-shell/proxy.conf.json b/web/oee-shell/proxy.conf.json
+new file mode 100644
+index 0000000..6928c99
+--- /dev/null
++++ b/web/oee-shell/proxy.conf.json
+@@ -0,0 +1,12 @@
++{
++  "/api": {
++    "target": "http://localhost:5067",
++    "secure": false,
++    "changeOrigin": true
++  },
++  "/.well-known": {
++    "target": "http://localhost:5067",
++    "secure": false,
++    "changeOrigin": true
++  }
++}
+diff --git a/web/oee-shell/public/favicon.ico b/web/oee-shell/public/favicon.ico
+new file mode 100644
+index 0000000..57614f9
+Binary files /dev/null and b/web/oee-shell/public/favicon.ico differ
+diff --git a/web/oee-shell/public/i18n/en.json b/web/oee-shell/public/i18n/en.json
+new file mode 100644
+index 0000000..5ab36e3
+--- /dev/null
++++ b/web/oee-shell/public/i18n/en.json
+@@ -0,0 +1,18 @@
++{
++  "nav": {
++    "dashboard": "Dashboard",
++    "downtime": "Downtime",
++    "reports": "Reports",
++    "masterData": "Master Data",
++    "logout": "Logout"
++  },
++  "login": {
++    "username": "Username",
++    "password": "Password",
++    "submit": "Log in",
++    "invalidCredentials": "Invalid username or password"
++  },
++  "placeholder": {
++    "comingLater": "This feature will be built in a later epic."
++  }
++}
+diff --git a/web/oee-shell/public/i18n/vi.json b/web/oee-shell/public/i18n/vi.json
+new file mode 100644
+index 0000000..250a2a3
+--- /dev/null
++++ b/web/oee-shell/public/i18n/vi.json
+@@ -0,0 +1,18 @@
++{
++  "nav": {
++    "dashboard": "Bảng điều khiển",
++    "downtime": "Dừng máy",
++    "reports": "Báo cáo",
++    "masterData": "Danh mục",
++    "logout": "Đăng xuất"
++  },
++  "login": {
++    "username": "Tên đăng nhập",
++    "password": "Mật khẩu",
++    "submit": "Đăng nhập",
++    "invalidCredentials": "Sai tên đăng nhập hoặc mật khẩu"
++  },
++  "placeholder": {
++    "comingLater": "Tính năng này sẽ được xây dựng ở epic sau."
++  }
++}
+diff --git a/web/oee-shell/src/app/app.config.ts b/web/oee-shell/src/app/app.config.ts
+new file mode 100644
+index 0000000..1e17811
+--- /dev/null
++++ b/web/oee-shell/src/app/app.config.ts
+@@ -0,0 +1,21 @@
++import { provideHttpClient, withInterceptors } from '@angular/common/http';
++import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
++import { provideRouter } from '@angular/router';
++import { provideTranslateService, provideTranslateLoader } from '@ngx-translate/core';
++import { providePrimeNG } from 'primeng/config';
++import Aura from '@primeuix/themes/aura';
++
++import { routes } from './app.routes';
++import { authInterceptor } from './core/auth/auth.interceptor';
++import { HttpTranslateLoader } from './core/i18n/http-translate-loader';
++
++export const appConfig: ApplicationConfig = {
++  providers: [
++    provideBrowserGlobalErrorListeners(),
++    provideRouter(routes),
++    provideHttpClient(withInterceptors([authInterceptor])),
++    providePrimeNG({ theme: { preset: Aura } }),
++    provideTranslateService({ lang: 'vi', fallbackLang: 'vi' }),
++    provideTranslateLoader(HttpTranslateLoader),
++  ],
++};
+diff --git a/web/oee-shell/src/app/app.html b/web/oee-shell/src/app/app.html
+new file mode 100644
+index 0000000..67e7bd4
+--- /dev/null
++++ b/web/oee-shell/src/app/app.html
+@@ -0,0 +1 @@
++<router-outlet />
+diff --git a/web/oee-shell/src/app/app.routes.ts b/web/oee-shell/src/app/app.routes.ts
+new file mode 100644
+index 0000000..4971881
+--- /dev/null
++++ b/web/oee-shell/src/app/app.routes.ts
+@@ -0,0 +1,25 @@
++import { Routes } from '@angular/router';
++import { authGuard } from './core/auth/auth.guard';
++import { Shell } from './core/layout/shell';
++import { Login } from './pages/login/login';
++import { DashboardPage } from './pages/dashboard/dashboard-page';
++import { DowntimePage } from './pages/downtime/downtime-page';
++import { MasterDataPage } from './pages/master-data/master-data-page';
++import { ReportsPage } from './pages/reports/reports-page';
++
++export const routes: Routes = [
++  { path: 'login', component: Login },
++  {
++    path: '',
++    component: Shell,
++    canActivate: [authGuard],
++    children: [
++      { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
++      { path: 'dashboard', component: DashboardPage },
++      { path: 'downtime', component: DowntimePage },
++      { path: 'reports', component: ReportsPage },
++      { path: 'master-data', component: MasterDataPage },
++    ],
++  },
++  { path: '**', redirectTo: 'dashboard' },
++];
+diff --git a/web/oee-shell/src/app/app.scss b/web/oee-shell/src/app/app.scss
+new file mode 100644
+index 0000000..e69de29
+diff --git a/web/oee-shell/src/app/app.spec.ts b/web/oee-shell/src/app/app.spec.ts
+new file mode 100644
+index 0000000..acad8f0
+--- /dev/null
++++ b/web/oee-shell/src/app/app.spec.ts
+@@ -0,0 +1,19 @@
++import { TestBed } from '@angular/core/testing';
++import { provideRouter } from '@angular/router';
++import { describe, it, expect, beforeEach } from 'vitest';
++import { App } from './app';
++
++describe('App', () => {
++  beforeEach(async () => {
++    await TestBed.configureTestingModule({
++      imports: [App],
++      providers: [provideRouter([])],
++    }).compileComponents();
++  });
++
++  it('should create the app', () => {
++    const fixture = TestBed.createComponent(App);
++    const app = fixture.componentInstance;
++    expect(app).toBeTruthy();
++  });
++});
+diff --git a/web/oee-shell/src/app/app.ts b/web/oee-shell/src/app/app.ts
+new file mode 100644
+index 0000000..372b06c
+--- /dev/null
++++ b/web/oee-shell/src/app/app.ts
+@@ -0,0 +1,10 @@
++import { Component } from '@angular/core';
++import { RouterOutlet } from '@angular/router';
++
++@Component({
++  selector: 'app-root',
++  imports: [RouterOutlet],
++  templateUrl: './app.html',
++  styleUrl: './app.scss',
++})
++export class App {}
+diff --git a/web/oee-shell/src/app/core/auth/auth.guard.ts b/web/oee-shell/src/app/core/auth/auth.guard.ts
+new file mode 100644
+index 0000000..0df2161
+--- /dev/null
++++ b/web/oee-shell/src/app/core/auth/auth.guard.ts
+@@ -0,0 +1,14 @@
++import { inject } from '@angular/core';
++import { CanActivateFn, Router } from '@angular/router';
++import { AuthService } from './auth.service';
++
++export const authGuard: CanActivateFn = () => {
++  const authService = inject(AuthService);
++  const router = inject(Router);
++
++  if (authService.isAuthenticated()) {
++    return true;
++  }
++
++  return router.parseUrl('/login');
++};
+diff --git a/web/oee-shell/src/app/core/auth/auth.interceptor.spec.ts b/web/oee-shell/src/app/core/auth/auth.interceptor.spec.ts
+new file mode 100644
+index 0000000..9338d3c
+--- /dev/null
++++ b/web/oee-shell/src/app/core/auth/auth.interceptor.spec.ts
+@@ -0,0 +1,42 @@
++import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
++import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
++import { TestBed } from '@angular/core/testing';
++import { beforeEach, afterEach, describe, it, expect } from 'vitest';
++import { authInterceptor } from './auth.interceptor';
++import { AuthService } from './auth.service';
++
++describe('authInterceptor', () => {
++  let httpClient: HttpClient;
++  let httpMock: HttpTestingController;
++
++  beforeEach(() => {
++    localStorage.clear();
++    TestBed.configureTestingModule({
++      providers: [provideHttpClient(withInterceptors([authInterceptor])), provideHttpClientTesting()],
++    });
++    httpClient = TestBed.inject(HttpClient);
++    httpMock = TestBed.inject(HttpTestingController);
++  });
++
++  afterEach(() => {
++    httpMock.verify();
++    localStorage.clear();
++  });
++
++  it('does not add an Authorization header when there is no token', () => {
++    httpClient.get('/api/whatever').subscribe();
++
++    const req = httpMock.expectOne('/api/whatever');
++    expect(req.request.headers.has('Authorization')).toBe(false);
++  });
++
++  it('adds a Bearer Authorization header when a token is stored', () => {
++    localStorage.setItem('oee_access_token', 'my-token');
++    TestBed.inject(AuthService); // picks up the stored token on construction
++
++    httpClient.get('/api/whatever').subscribe();
++
++    const req = httpMock.expectOne('/api/whatever');
++    expect(req.request.headers.get('Authorization')).toBe('Bearer my-token');
++  });
++});
+diff --git a/web/oee-shell/src/app/core/auth/auth.interceptor.ts b/web/oee-shell/src/app/core/auth/auth.interceptor.ts
+new file mode 100644
+index 0000000..45975ed
+--- /dev/null
++++ b/web/oee-shell/src/app/core/auth/auth.interceptor.ts
+@@ -0,0 +1,18 @@
++import { HttpInterceptorFn } from '@angular/common/http';
++import { inject } from '@angular/core';
++import { AuthService } from './auth.service';
++
++/** Attaches the JWT Bearer token to every outgoing request (Story 1.1 AC #2). */
++export const authInterceptor: HttpInterceptorFn = (req, next) => {
++  const token = inject(AuthService).accessToken;
++
++  if (!token) {
++    return next(req);
++  }
++
++  return next(
++    req.clone({
++      setHeaders: { Authorization: `Bearer ${token}` },
++    }),
++  );
++};
+diff --git a/web/oee-shell/src/app/core/auth/auth.service.spec.ts b/web/oee-shell/src/app/core/auth/auth.service.spec.ts
+new file mode 100644
+index 0000000..8659cef
+--- /dev/null
++++ b/web/oee-shell/src/app/core/auth/auth.service.spec.ts
+@@ -0,0 +1,62 @@
++import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
++import { provideHttpClient } from '@angular/common/http';
++import { TestBed } from '@angular/core/testing';
++import { beforeEach, afterEach, describe, it, expect } from 'vitest';
++import { AuthService } from './auth.service';
++
++function fakeJwt(payload: Record<string, unknown>): string {
++  const base64UrlEncode = (obj: unknown) =>
++    btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
++  return `${base64UrlEncode({ alg: 'RS256' })}.${base64UrlEncode(payload)}.sig`;
++}
++
++describe('AuthService', () => {
++  let service: AuthService;
++  let httpMock: HttpTestingController;
++
++  beforeEach(() => {
++    localStorage.clear();
++    TestBed.configureTestingModule({
++      providers: [provideHttpClient(), provideHttpClientTesting()],
++    });
++    service = TestBed.inject(AuthService);
++    httpMock = TestBed.inject(HttpTestingController);
++  });
++
++  afterEach(() => {
++    httpMock.verify();
++    localStorage.clear();
++  });
++
++  it('starts unauthenticated when there is no stored token', () => {
++    expect(service.isAuthenticated()).toBe(false);
++    expect(service.role()).toBeNull();
++  });
++
++  it('login stores the token and exposes decoded claims', async () => {
++    const token = fakeJwt({ sub: '1', role: 'Admin' });
++    const loginPromise = service.login('admin', 'ChangeMe123!');
++
++    const req = httpMock.expectOne('/api/auth/login');
++    expect(req.request.method).toBe('POST');
++    req.flush({ accessToken: token, expiresAtUtc: new Date().toISOString() });
++
++    await loginPromise;
++
++    expect(service.isAuthenticated()).toBe(true);
++    expect(service.role()).toBe('Admin');
++    expect(localStorage.getItem('oee_access_token')).toBe(token);
++  });
++
++  it('logout clears the token', async () => {
++    const token = fakeJwt({ sub: '1', role: 'Admin' });
++    const loginPromise = service.login('admin', 'ChangeMe123!');
++    httpMock.expectOne('/api/auth/login').flush({ accessToken: token, expiresAtUtc: new Date().toISOString() });
++    await loginPromise;
++
++    service.logout();
++
++    expect(service.isAuthenticated()).toBe(false);
++    expect(localStorage.getItem('oee_access_token')).toBeNull();
++  });
++});
+diff --git a/web/oee-shell/src/app/core/auth/auth.service.ts b/web/oee-shell/src/app/core/auth/auth.service.ts
+new file mode 100644
+index 0000000..bf9419c
+--- /dev/null
++++ b/web/oee-shell/src/app/core/auth/auth.service.ts
+@@ -0,0 +1,53 @@
++import { HttpClient } from '@angular/common/http';
++import { Injectable, computed, signal } from '@angular/core';
++import { firstValueFrom } from 'rxjs';
++import { JwtClaims, decodeJwtClaims } from './jwt.util';
++
++export interface LoginResponse {
++  accessToken: string;
++  expiresAtUtc: string;
++}
++
++const STORAGE_KEY = 'oee_access_token';
++
++/**
++ * Session state for the currently logged-in user. Claims are decoded client-side purely to drive
++ * UI (sidebar-by-role, UX-DR2/3) — every API request still re-validates the token server-side, so
++ * nothing here is an authorization boundary (NFR-5, see Story 1.6 Dev Notes).
++ */
++@Injectable({ providedIn: 'root' })
++export class AuthService {
++  private readonly tokenSignal = signal<string | null>(this.readStoredToken());
++
++  readonly claims = computed<JwtClaims | null>(() => {
++    const token = this.tokenSignal();
++    return token ? decodeJwtClaims(token) : null;
++  });
++
++  readonly isAuthenticated = computed(() => this.claims() !== null);
++  readonly role = computed(() => this.claims()?.role ?? null);
++
++  constructor(private readonly http: HttpClient) {}
++
++  get accessToken(): string | null {
++    return this.tokenSignal();
++  }
++
++  async login(username: string, password: string): Promise<void> {
++    const response = await firstValueFrom(this.http.post<LoginResponse>('/api/auth/login', { username, password }));
++    this.tokenSignal.set(response.accessToken);
++    localStorage.setItem(STORAGE_KEY, response.accessToken);
++  }
++
++  logout(): void {
++    this.tokenSignal.set(null);
++    localStorage.removeItem(STORAGE_KEY);
++  }
++
++  private readStoredToken(): string | null {
++    if (typeof localStorage === 'undefined') {
++      return null;
++    }
++    return localStorage.getItem(STORAGE_KEY);
++  }
++}
+diff --git a/web/oee-shell/src/app/core/auth/jwt.util.spec.ts b/web/oee-shell/src/app/core/auth/jwt.util.spec.ts
+new file mode 100644
+index 0000000..6238ea6
+--- /dev/null
++++ b/web/oee-shell/src/app/core/auth/jwt.util.spec.ts
+@@ -0,0 +1,42 @@
++import { describe, it, expect } from 'vitest';
++import { decodeJwtClaims } from './jwt.util';
++
++function fakeJwt(payload: Record<string, unknown>): string {
++  const base64UrlEncode = (obj: unknown) =>
++    btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
++
++  return `${base64UrlEncode({ alg: 'RS256', typ: 'JWT' })}.${base64UrlEncode(payload)}.signature`;
++}
++
++describe('decodeJwtClaims', () => {
++  it('returns null for a malformed token', () => {
++    expect(decodeJwtClaims('not-a-jwt')).toBeNull();
++  });
++
++  it('decodes role, siteId and lineId claims', () => {
++    const token = fakeJwt({
++      sub: 'user-1',
++      unique_name: 'operator1',
++      role: 'Operator',
++      site_id: 'site-1',
++      line_id: ['line-1', 'line-2'],
++      exp: 9999999999,
++    });
++
++    const claims = decodeJwtClaims(token);
++
++    expect(claims?.role).toBe('Operator');
++    expect(claims?.site_id).toEqual(['site-1']);
++    expect(claims?.line_id).toEqual(['line-1', 'line-2']);
++  });
++
++  it('decodes an Admin token with no site/line claims', () => {
++    const token = fakeJwt({ sub: 'admin-1', unique_name: 'admin', role: 'Admin' });
++
++    const claims = decodeJwtClaims(token);
++
++    expect(claims?.role).toBe('Admin');
++    expect(claims?.site_id).toBeUndefined();
++    expect(claims?.line_id).toBeUndefined();
++  });
++});
+diff --git a/web/oee-shell/src/app/core/auth/jwt.util.ts b/web/oee-shell/src/app/core/auth/jwt.util.ts
+new file mode 100644
+index 0000000..e59fcce
+--- /dev/null
++++ b/web/oee-shell/src/app/core/auth/jwt.util.ts
+@@ -0,0 +1,48 @@
++/**
++ * Client-side JWT payload decoding — for UI display only (e.g. which sidebar items to show).
++ * Never trust this for authorization: the API always re-validates the token server-side (NFR-5).
++ */
++export interface JwtClaims {
++  sub?: string;
++  unique_name?: string;
++  role?: string;
++  site_id?: string[];
++  line_id?: string[];
++  exp?: number;
++}
++
++export function decodeJwtClaims(token: string): JwtClaims | null {
++  const parts = token.split('.');
++  if (parts.length !== 3) {
++    return null;
++  }
++
++  try {
++    const payload = base64UrlDecode(parts[1]);
++    const parsed = JSON.parse(payload) as Record<string, unknown>;
++
++    const toArray = (value: unknown): string[] | undefined =>
++      value === undefined ? undefined : Array.isArray(value) ? (value as string[]) : [value as string];
++
++    return {
++      sub: parsed['sub'] as string | undefined,
++      unique_name: parsed['unique_name'] as string | undefined,
++      role: parsed['role'] as string | undefined,
++      site_id: toArray(parsed['site_id']),
++      line_id: toArray(parsed['line_id']),
++      exp: parsed['exp'] as number | undefined,
++    };
++  } catch {
++    return null;
++  }
++}
++
++function base64UrlDecode(input: string): string {
++  const base64 = input.replace(/-/g, '+').replace(/_/g, '/').padEnd(input.length + ((4 - (input.length % 4)) % 4), '=');
++  return decodeURIComponent(
++    atob(base64)
++      .split('')
++      .map((c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
++      .join(''),
++  );
++}
+diff --git a/web/oee-shell/src/app/core/i18n/http-translate-loader.ts b/web/oee-shell/src/app/core/i18n/http-translate-loader.ts
+new file mode 100644
+index 0000000..d88df77
+--- /dev/null
++++ b/web/oee-shell/src/app/core/i18n/http-translate-loader.ts
+@@ -0,0 +1,19 @@
++import { HttpClient } from '@angular/common/http';
++import { Injectable } from '@angular/core';
++import { Observable } from 'rxjs';
++import { TranslateLoader, TranslationObject } from '@ngx-translate/core';
++
++/**
++ * Loads `/i18n/{lang}.json` via HttpClient. @ngx-translate/core v18 (signals-based) does not yet
++ * ship an official HTTP loader package compatible with this API — this is a deliberately small
++ * (few lines) replacement rather than pulling in a separate loader dependency of uncertain version
++ * compatibility (FR-007 / UX-DR4).
++ */
++@Injectable()
++export class HttpTranslateLoader implements TranslateLoader {
++  constructor(private readonly http: HttpClient) {}
++
++  getTranslation(lang: string): Observable<TranslationObject> {
++    return this.http.get<TranslationObject>(`/i18n/${lang}.json`);
++  }
++}
+diff --git a/web/oee-shell/src/app/core/layout/shell.html b/web/oee-shell/src/app/core/layout/shell.html
+new file mode 100644
+index 0000000..ad74712
+--- /dev/null
++++ b/web/oee-shell/src/app/core/layout/shell.html
+@@ -0,0 +1,60 @@
++<div class="shell">
++  <header class="shell__topbar">
++    <div class="shell__brand">OEE</div>
++
++    <!-- Site/Line selector: full implementation (progressive disclosure, UX-DR3) lands in Story 1.6 -->
++    <div class="shell__site-selector-placeholder"></div>
++
++    <div class="shell__topbar-actions">
++      <button
++        type="button"
++        class="shell__lang-btn"
++        [class.shell__lang-btn--active]="currentLang() === 'vi'"
++        (click)="useLanguage('vi')"
++        data-testid="lang-vi"
++      >
++        VI
++      </button>
++      <button
++        type="button"
++        class="shell__lang-btn"
++        [class.shell__lang-btn--active]="currentLang() === 'en'"
++        (click)="useLanguage('en')"
++        data-testid="lang-en"
++      >
++        EN
++      </button>
++
++      <p-button
++        [label]="'nav.logout' | translate"
++        icon="pi pi-sign-out"
++        severity="secondary"
++        size="small"
++        (onClick)="logout()"
++        data-testid="logout-btn"
++      />
++    </div>
++  </header>
++
++  <div class="shell__body">
++    <nav class="shell__sidebar" data-testid="sidebar">
++      @for (item of menuItems(); track item.route) {
++        <a
++          [routerLink]="item.route"
++          routerLinkActive="shell__nav-item--active"
++          class="shell__nav-item"
++          [attr.data-testid]="'nav-' + item.route"
++        >
++          <i [class]="item.icon"></i>
++          <span>{{ item.labelKey | translate }}</span>
++        </a>
++      }
++    </nav>
++
++    <main class="shell__content">
++      <router-outlet />
++    </main>
++  </div>
++
++  <footer class="shell__footer">oee-new</footer>
++</div>
+diff --git a/web/oee-shell/src/app/core/layout/shell.scss b/web/oee-shell/src/app/core/layout/shell.scss
+new file mode 100644
+index 0000000..6295b74
+--- /dev/null
++++ b/web/oee-shell/src/app/core/layout/shell.scss
+@@ -0,0 +1,84 @@
++.shell {
++  display: flex;
++  flex-direction: column;
++  min-height: 100vh;
++
++  &__topbar {
++    display: flex;
++    align-items: center;
++    gap: 1rem;
++    padding: 0 1.5rem;
++    height: 4rem;
++    background: var(--p-surface-0, #fff);
++    border-bottom: 1px solid var(--p-surface-200, #e5e7eb);
++  }
++
++  &__brand {
++    font-weight: 700;
++    font-size: 1.25rem;
++  }
++
++  &__site-selector-placeholder {
++    flex: 1;
++  }
++
++  &__topbar-actions {
++    display: flex;
++    align-items: center;
++    gap: 0.5rem;
++  }
++
++  &__lang-btn {
++    border: none;
++    background: transparent;
++    padding: 0.25rem 0.5rem;
++    cursor: pointer;
++    font-weight: 600;
++    opacity: 0.6;
++
++    &--active {
++      opacity: 1;
++      text-decoration: underline;
++    }
++  }
++
++  &__body {
++    display: flex;
++    flex: 1;
++  }
++
++  &__sidebar {
++    width: 15rem;
++    background: var(--p-surface-0, #fff);
++    border-right: 1px solid var(--p-surface-200, #e5e7eb);
++    display: flex;
++    flex-direction: column;
++    padding: 1rem 0;
++  }
++
++  &__nav-item {
++    display: flex;
++    align-items: center;
++    gap: 0.75rem;
++    padding: 0.75rem 1.5rem;
++    text-decoration: none;
++    color: inherit;
++
++    &--active {
++      background: var(--p-surface-100, #f3f4f6);
++      font-weight: 600;
++    }
++  }
++
++  &__content {
++    flex: 1;
++    padding: 1.5rem;
++  }
++
++  &__footer {
++    padding: 0.75rem 1.5rem;
++    text-align: center;
++    font-size: 0.875rem;
++    opacity: 0.6;
++  }
++}
+diff --git a/web/oee-shell/src/app/core/layout/shell.spec.ts b/web/oee-shell/src/app/core/layout/shell.spec.ts
+new file mode 100644
+index 0000000..ac991ea
+--- /dev/null
++++ b/web/oee-shell/src/app/core/layout/shell.spec.ts
+@@ -0,0 +1,86 @@
++import { provideHttpClient } from '@angular/common/http';
++import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
++import { TestBed } from '@angular/core/testing';
++import { provideRouter } from '@angular/router';
++import { provideTranslateService, provideTranslateLoader, TranslateService } from '@ngx-translate/core';
++import { beforeEach, afterEach, describe, it, expect } from 'vitest';
++import { HttpTranslateLoader } from '../i18n/http-translate-loader';
++import { Shell } from './shell';
++
++function fakeJwt(payload: Record<string, unknown>): string {
++  const base64UrlEncode = (obj: unknown) =>
++    btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
++  return `${base64UrlEncode({ alg: 'RS256' })}.${base64UrlEncode(payload)}.sig`;
++}
++
++describe('Shell', () => {
++  let httpMock: HttpTestingController;
++
++  function setUp() {
++    TestBed.configureTestingModule({
++      imports: [Shell],
++      providers: [
++        provideRouter([]),
++        provideHttpClient(),
++        provideHttpClientTesting(),
++        provideTranslateService({ lang: 'vi', fallbackLang: 'vi' }),
++        provideTranslateLoader(HttpTranslateLoader),
++      ],
++    });
++    httpMock = TestBed.inject(HttpTestingController);
++  }
++
++  afterEach(() => httpMock?.verify());
++
++  it('shows Dashboard/Downtime/Reports but hides Master Data for a Manager', () => {
++    localStorage.setItem('oee_access_token', fakeJwt({ sub: '1', role: 'Manager' }));
++    setUp();
++
++    const fixture = TestBed.createComponent(Shell);
++    httpMock.expectOne('/i18n/vi.json').flush({ nav: { dashboard: 'D', downtime: 'DT', reports: 'R', logout: 'L' } });
++    fixture.detectChanges();
++
++    const el: HTMLElement = fixture.nativeElement;
++    expect(el.querySelector('[data-testid="nav-/dashboard"]')).toBeTruthy();
++    expect(el.querySelector('[data-testid="nav-/downtime"]')).toBeTruthy();
++    expect(el.querySelector('[data-testid="nav-/reports"]')).toBeTruthy();
++    expect(el.querySelector('[data-testid="nav-/master-data"]')).toBeNull();
++
++    localStorage.clear();
++  });
++
++  it('shows all four sidebar items for an Admin', () => {
++    localStorage.setItem('oee_access_token', fakeJwt({ sub: '1', role: 'Admin' }));
++    setUp();
++
++    const fixture = TestBed.createComponent(Shell);
++    httpMock.expectOne('/i18n/vi.json').flush({ nav: { dashboard: 'D', downtime: 'DT', reports: 'R', masterData: 'M', logout: 'L' } });
++    fixture.detectChanges();
++
++    const el: HTMLElement = fixture.nativeElement;
++    expect(el.querySelector('[data-testid="nav-/master-data"]')).toBeTruthy();
++
++    localStorage.clear();
++  });
++
++  it('switching language updates the rendered sidebar labels without a reload (AC #4)', () => {
++    localStorage.setItem('oee_access_token', fakeJwt({ sub: '1', role: 'Admin' }));
++    setUp();
++
++    const fixture = TestBed.createComponent(Shell);
++    httpMock.expectOne('/i18n/vi.json').flush({ nav: { dashboard: 'Bảng điều khiển', downtime: 'DT', reports: 'R', masterData: 'M', logout: 'L' } });
++    fixture.detectChanges();
++
++    expect(fixture.nativeElement.textContent).toContain('Bảng điều khiển');
++
++    const translate = TestBed.inject(TranslateService);
++    translate.use('en');
++    httpMock.expectOne('/i18n/en.json').flush({ nav: { dashboard: 'Dashboard', downtime: 'DT', reports: 'R', masterData: 'M', logout: 'Logout' } });
++    fixture.detectChanges();
++
++    expect(fixture.nativeElement.textContent).toContain('Dashboard');
++    expect(fixture.nativeElement.textContent).not.toContain('Bảng điều khiển');
++
++    localStorage.clear();
++  });
++});
+diff --git a/web/oee-shell/src/app/core/layout/shell.ts b/web/oee-shell/src/app/core/layout/shell.ts
+new file mode 100644
+index 0000000..9b612c8
+--- /dev/null
++++ b/web/oee-shell/src/app/core/layout/shell.ts
+@@ -0,0 +1,31 @@
++import { Component, computed } from '@angular/core';
++import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
++import { TranslatePipe, TranslateService } from '@ngx-translate/core';
++import { ButtonModule } from 'primeng/button';
++import { AuthService } from '../auth/auth.service';
++import { getVisibleMenuItems } from './sidebar-menu';
++
++@Component({
++  selector: 'app-shell',
++  standalone: true,
++  imports: [RouterLink, RouterLinkActive, RouterOutlet, TranslatePipe, ButtonModule],
++  templateUrl: './shell.html',
++  styleUrl: './shell.scss',
++})
++export class Shell {
++  readonly menuItems = computed(() => getVisibleMenuItems(this.auth.role()));
++  readonly currentLang = computed(() => this.translate.currentLang() ?? this.translate.fallbackLang() ?? 'vi');
++
++  constructor(
++    private readonly auth: AuthService,
++    private readonly translate: TranslateService,
++  ) {}
++
++  useLanguage(lang: 'vi' | 'en'): void {
++    this.translate.use(lang);
++  }
++
++  logout(): void {
++    this.auth.logout();
++  }
++}
+diff --git a/web/oee-shell/src/app/core/layout/sidebar-menu.spec.ts b/web/oee-shell/src/app/core/layout/sidebar-menu.spec.ts
+new file mode 100644
+index 0000000..8fa5034
+--- /dev/null
++++ b/web/oee-shell/src/app/core/layout/sidebar-menu.spec.ts
+@@ -0,0 +1,31 @@
++import { describe, it, expect } from 'vitest';
++import { getVisibleMenuItems } from './sidebar-menu';
++
++describe('getVisibleMenuItems', () => {
++  it('returns empty array when role is null (not logged in)', () => {
++    expect(getVisibleMenuItems(null)).toEqual([]);
++  });
++
++  it('shows Dashboard, Downtime, Reports but not Master Data for Operator', () => {
++    const routes = getVisibleMenuItems('Operator').map((i) => i.route);
++    expect(routes).toContain('/dashboard');
++    expect(routes).toContain('/downtime');
++    expect(routes).not.toContain('/reports');
++    expect(routes).not.toContain('/master-data');
++  });
++
++  it('shows Dashboard, Downtime, Reports but not Master Data for Manager', () => {
++    const routes = getVisibleMenuItems('Manager').map((i) => i.route);
++    expect(routes).toEqual(['/dashboard', '/downtime', '/reports']);
++  });
++
++  it('shows Dashboard, Downtime, Reports but not Master Data for Viewer', () => {
++    const routes = getVisibleMenuItems('Viewer').map((i) => i.route);
++    expect(routes).toEqual(['/dashboard', '/downtime', '/reports']);
++  });
++
++  it('shows all four items for Admin', () => {
++    const routes = getVisibleMenuItems('Admin').map((i) => i.route);
++    expect(routes).toEqual(['/dashboard', '/downtime', '/reports', '/master-data']);
++  });
++});
+diff --git a/web/oee-shell/src/app/core/layout/sidebar-menu.ts b/web/oee-shell/src/app/core/layout/sidebar-menu.ts
+new file mode 100644
+index 0000000..3ff4ac7
+--- /dev/null
++++ b/web/oee-shell/src/app/core/layout/sidebar-menu.ts
+@@ -0,0 +1,21 @@
++export interface SidebarMenuItem {
++  labelKey: string;
++  icon: string;
++  route: string;
++  /** Roles allowed to see this item (UX-DR2 role/sidebar matrix from EXPERIENCE.md). */
++  roles: ReadonlyArray<'Admin' | 'Manager' | 'Operator' | 'Viewer'>;
++}
++
++export const SIDEBAR_MENU: readonly SidebarMenuItem[] = [
++  { labelKey: 'nav.dashboard', icon: 'pi pi-th-large', route: '/dashboard', roles: ['Admin', 'Manager', 'Operator', 'Viewer'] },
++  { labelKey: 'nav.downtime', icon: 'pi pi-history', route: '/downtime', roles: ['Admin', 'Manager', 'Operator', 'Viewer'] },
++  { labelKey: 'nav.reports', icon: 'pi pi-chart-bar', route: '/reports', roles: ['Admin', 'Manager', 'Viewer'] },
++  { labelKey: 'nav.masterData', icon: 'pi pi-cog', route: '/master-data', roles: ['Admin'] },
++];
++
++export function getVisibleMenuItems(role: string | null): SidebarMenuItem[] {
++  if (!role) {
++    return [];
++  }
++  return SIDEBAR_MENU.filter((item) => (item.roles as readonly string[]).includes(role));
++}
+diff --git a/web/oee-shell/src/app/pages/dashboard/dashboard-page.ts b/web/oee-shell/src/app/pages/dashboard/dashboard-page.ts
+new file mode 100644
+index 0000000..6ce8cf8
+--- /dev/null
++++ b/web/oee-shell/src/app/pages/dashboard/dashboard-page.ts
+@@ -0,0 +1,10 @@
++import { Component } from '@angular/core';
++import { TranslatePipe } from '@ngx-translate/core';
++
++@Component({
++  selector: 'app-dashboard-page',
++  standalone: true,
++  imports: [TranslatePipe],
++  template: `<h2>{{ 'nav.dashboard' | translate }}</h2><p>{{ 'placeholder.comingLater' | translate }}</p>`,
++})
++export class DashboardPage {}
+diff --git a/web/oee-shell/src/app/pages/downtime/downtime-page.ts b/web/oee-shell/src/app/pages/downtime/downtime-page.ts
+new file mode 100644
+index 0000000..289c75f
+--- /dev/null
++++ b/web/oee-shell/src/app/pages/downtime/downtime-page.ts
+@@ -0,0 +1,10 @@
++import { Component } from '@angular/core';
++import { TranslatePipe } from '@ngx-translate/core';
++
++@Component({
++  selector: 'app-downtime-page',
++  standalone: true,
++  imports: [TranslatePipe],
++  template: `<h2>{{ 'nav.downtime' | translate }}</h2><p>{{ 'placeholder.comingLater' | translate }}</p>`,
++})
++export class DowntimePage {}
+diff --git a/web/oee-shell/src/app/pages/login/login.html b/web/oee-shell/src/app/pages/login/login.html
+new file mode 100644
+index 0000000..d11933b
+--- /dev/null
++++ b/web/oee-shell/src/app/pages/login/login.html
+@@ -0,0 +1,37 @@
++<div class="login">
++  <form class="login__card" (ngSubmit)="submit()">
++    <h1>OEE</h1>
++
++    <label for="username">{{ 'login.username' | translate }}</label>
++    <input
++      pInputText
++      id="username"
++      name="username"
++      [ngModel]="username()"
++      (ngModelChange)="username.set($event)"
++      data-testid="username"
++    />
++
++    <label for="password">{{ 'login.password' | translate }}</label>
++    <p-password
++      id="password"
++      name="password"
++      [ngModel]="password()"
++      (ngModelChange)="password.set($event)"
++      [feedback]="false"
++      [toggleMask]="true"
++      data-testid="password"
++    />
++
++    @if (errorKey()) {
++      <p class="login__error" data-testid="login-error">{{ errorKey()! | translate }}</p>
++    }
++
++    <p-button
++      type="submit"
++      [label]="'login.submit' | translate"
++      [loading]="isSubmitting()"
++      data-testid="submit"
++    />
++  </form>
++</div>
+diff --git a/web/oee-shell/src/app/pages/login/login.scss b/web/oee-shell/src/app/pages/login/login.scss
+new file mode 100644
+index 0000000..7853f98
+--- /dev/null
++++ b/web/oee-shell/src/app/pages/login/login.scss
+@@ -0,0 +1,22 @@
++.login {
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  min-height: 100vh;
++
++  &__card {
++    display: flex;
++    flex-direction: column;
++    gap: 0.75rem;
++    width: 20rem;
++    padding: 2rem;
++    border: 1px solid var(--p-surface-200, #e5e7eb);
++    border-radius: 0.75rem;
++  }
++
++  &__error {
++    color: var(--p-red-500, #ef4444);
++    font-size: 0.875rem;
++    margin: 0;
++  }
++}
+diff --git a/web/oee-shell/src/app/pages/login/login.ts b/web/oee-shell/src/app/pages/login/login.ts
+new file mode 100644
+index 0000000..7cf161e
+--- /dev/null
++++ b/web/oee-shell/src/app/pages/login/login.ts
+@@ -0,0 +1,40 @@
++import { Component, signal } from '@angular/core';
++import { FormsModule } from '@angular/forms';
++import { Router } from '@angular/router';
++import { TranslatePipe } from '@ngx-translate/core';
++import { ButtonModule } from 'primeng/button';
++import { InputTextModule } from 'primeng/inputtext';
++import { PasswordModule } from 'primeng/password';
++import { AuthService } from '../../core/auth/auth.service';
++
++@Component({
++  selector: 'app-login',
++  standalone: true,
++  imports: [FormsModule, TranslatePipe, ButtonModule, InputTextModule, PasswordModule],
++  templateUrl: './login.html',
++  styleUrl: './login.scss',
++})
++export class Login {
++  readonly username = signal('');
++  readonly password = signal('');
++  readonly errorKey = signal<string | null>(null);
++  readonly isSubmitting = signal(false);
++
++  constructor(
++    private readonly auth: AuthService,
++    private readonly router: Router,
++  ) {}
++
++  async submit(): Promise<void> {
++    this.errorKey.set(null);
++    this.isSubmitting.set(true);
++    try {
++      await this.auth.login(this.username(), this.password());
++      await this.router.navigateByUrl('/dashboard');
++    } catch {
++      this.errorKey.set('login.invalidCredentials');
++    } finally {
++      this.isSubmitting.set(false);
++    }
++  }
++}
+diff --git a/web/oee-shell/src/app/pages/master-data/master-data-page.ts b/web/oee-shell/src/app/pages/master-data/master-data-page.ts
+new file mode 100644
+index 0000000..5cde59f
+--- /dev/null
++++ b/web/oee-shell/src/app/pages/master-data/master-data-page.ts
+@@ -0,0 +1,10 @@
++import { Component } from '@angular/core';
++import { TranslatePipe } from '@ngx-translate/core';
++
++@Component({
++  selector: 'app-master-data-page',
++  standalone: true,
++  imports: [TranslatePipe],
++  template: `<h2>{{ 'nav.masterData' | translate }}</h2><p>{{ 'placeholder.comingLater' | translate }}</p>`,
++})
++export class MasterDataPage {}
+diff --git a/web/oee-shell/src/app/pages/reports/reports-page.ts b/web/oee-shell/src/app/pages/reports/reports-page.ts
+new file mode 100644
+index 0000000..298a87a
+--- /dev/null
++++ b/web/oee-shell/src/app/pages/reports/reports-page.ts
+@@ -0,0 +1,10 @@
++import { Component } from '@angular/core';
++import { TranslatePipe } from '@ngx-translate/core';
++
++@Component({
++  selector: 'app-reports-page',
++  standalone: true,
++  imports: [TranslatePipe],
++  template: `<h2>{{ 'nav.reports' | translate }}</h2><p>{{ 'placeholder.comingLater' | translate }}</p>`,
++})
++export class ReportsPage {}
+diff --git a/web/oee-shell/src/index.html b/web/oee-shell/src/index.html
+new file mode 100644
+index 0000000..f08b5bc
+--- /dev/null
++++ b/web/oee-shell/src/index.html
+@@ -0,0 +1,13 @@
++<!doctype html>
++<html lang="en">
++<head>
++  <meta charset="utf-8">
++  <title>OeeShell</title>
++  <base href="/">
++  <meta name="viewport" content="width=device-width, initial-scale=1">
++  <link rel="icon" type="image/x-icon" href="favicon.ico">
++</head>
++<body>
++  <app-root></app-root>
++</body>
++</html>
+diff --git a/web/oee-shell/src/main.ts b/web/oee-shell/src/main.ts
+new file mode 100644
+index 0000000..5df75f9
+--- /dev/null
++++ b/web/oee-shell/src/main.ts
+@@ -0,0 +1,6 @@
++import { bootstrapApplication } from '@angular/platform-browser';
++import { appConfig } from './app/app.config';
++import { App } from './app/app';
++
++bootstrapApplication(App, appConfig)
++  .catch((err) => console.error(err));
+diff --git a/web/oee-shell/src/styles.scss b/web/oee-shell/src/styles.scss
+new file mode 100644
+index 0000000..90d4ee0
+--- /dev/null
++++ b/web/oee-shell/src/styles.scss
+@@ -0,0 +1 @@
++/* You can add global styles to this file, and also import other style files */
+diff --git a/web/oee-shell/tsconfig.app.json b/web/oee-shell/tsconfig.app.json
+new file mode 100644
+index 0000000..264f459
+--- /dev/null
++++ b/web/oee-shell/tsconfig.app.json
+@@ -0,0 +1,15 @@
++/* To learn more about Typescript configuration file: https://www.typescriptlang.org/docs/handbook/tsconfig-json.html. */
++/* To learn more about Angular compiler options: https://angular.dev/reference/configs/angular-compiler-options. */
++{
++  "extends": "./tsconfig.json",
++  "compilerOptions": {
++    "outDir": "./out-tsc/app",
++    "types": []
++  },
++  "include": [
++    "src/**/*.ts"
++  ],
++  "exclude": [
++    "src/**/*.spec.ts"
++  ]
++}
+diff --git a/web/oee-shell/tsconfig.json b/web/oee-shell/tsconfig.json
+new file mode 100644
+index 0000000..2ab7442
+--- /dev/null
++++ b/web/oee-shell/tsconfig.json
+@@ -0,0 +1,33 @@
++/* To learn more about Typescript configuration file: https://www.typescriptlang.org/docs/handbook/tsconfig-json.html. */
++/* To learn more about Angular compiler options: https://angular.dev/reference/configs/angular-compiler-options. */
++{
++  "compileOnSave": false,
++  "compilerOptions": {
++    "strict": true,
++    "noImplicitOverride": true,
++    "noPropertyAccessFromIndexSignature": true,
++    "noImplicitReturns": true,
++    "noFallthroughCasesInSwitch": true,
++    "skipLibCheck": true,
++    "isolatedModules": true,
++    "experimentalDecorators": true,
++    "importHelpers": true,
++    "target": "ES2022",
++    "module": "preserve"
++  },
++  "angularCompilerOptions": {
++    "enableI18nLegacyMessageIdFormat": false,
++    "strictInjectionParameters": true,
++    "strictInputAccessModifiers": true,
++    "strictTemplates": true
++  },
++  "files": [],
++  "references": [
++    {
++      "path": "./tsconfig.app.json"
++    },
++    {
++      "path": "./tsconfig.spec.json"
++    }
++  ]
++}
+diff --git a/web/oee-shell/tsconfig.spec.json b/web/oee-shell/tsconfig.spec.json
+new file mode 100644
+index 0000000..d383706
+--- /dev/null
++++ b/web/oee-shell/tsconfig.spec.json
+@@ -0,0 +1,15 @@
++/* To learn more about Typescript configuration file: https://www.typescriptlang.org/docs/handbook/tsconfig-json.html. */
++/* To learn more about Angular compiler options: https://angular.dev/reference/configs/angular-compiler-options. */
++{
++  "extends": "./tsconfig.json",
++  "compilerOptions": {
++    "outDir": "./out-tsc/spec",
++    "types": [
++      "vitest/globals"
++    ]
++  },
++  "include": [
++    "src/**/*.d.ts",
++    "src/**/*.spec.ts"
++  ]
++}

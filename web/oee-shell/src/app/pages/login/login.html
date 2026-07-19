@@ -1,0 +1,37 @@
+<div class="login">
+  <form class="login__card" (ngSubmit)="submit()">
+    <h1>OEE</h1>
+
+    <label for="username">{{ 'login.username' | translate }}</label>
+    <input
+      pInputText
+      id="username"
+      name="username"
+      [ngModel]="username()"
+      (ngModelChange)="username.set($event)"
+      data-testid="username"
+    />
+
+    <label for="password">{{ 'login.password' | translate }}</label>
+    <p-password
+      id="password"
+      name="password"
+      [ngModel]="password()"
+      (ngModelChange)="password.set($event)"
+      [feedback]="false"
+      [toggleMask]="true"
+      data-testid="password"
+    />
+
+    @if (errorKey()) {
+      <p class="login__error" data-testid="login-error">{{ errorKey()! | translate }}</p>
+    }
+
+    <p-button
+      type="submit"
+      [label]="'login.submit' | translate"
+      [loading]="isSubmitting()"
+      data-testid="submit"
+    />
+  </form>
+</div>

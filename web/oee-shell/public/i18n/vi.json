@@ -1,0 +1,19 @@
+{
+  "nav": {
+    "dashboard": "Bảng điều khiển",
+    "downtime": "Dừng máy",
+    "reports": "Báo cáo",
+    "masterData": "Danh mục",
+    "logout": "Đăng xuất"
+  },
+  "login": {
+    "username": "Tên đăng nhập",
+    "password": "Mật khẩu",
+    "submit": "Đăng nhập",
+    "invalidCredentials": "Sai tên đăng nhập hoặc mật khẩu",
+    "error": "Đã xảy ra lỗi. Vui lòng thử lại."
+  },
+  "placeholder": {
+    "comingLater": "Tính năng này sẽ được xây dựng ở epic sau."
+  }
+}

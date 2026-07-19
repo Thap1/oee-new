@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OeeNew.Api/OeeNew.Api.csproj" />
+    <Project Path="src/OeeNew.Application/OeeNew.Application.csproj" />
+    <Project Path="src/OeeNew.Domain/OeeNew.Domain.csproj" />
+    <Project Path="src/OeeNew.Infrastructure/OeeNew.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OeeNew.Api.Tests/OeeNew.Api.Tests.csproj" />
+    <Project Path="tests/OeeNew.Application.Tests/OeeNew.Application.Tests.csproj" />
+    <Project Path="tests/OeeNew.Architecture.Tests/OeeNew.Architecture.Tests.csproj" />
+    <Project Path="tests/OeeNew.Domain.Tests/OeeNew.Domain.Tests.csproj" />
+  </Folder>
+</Solution>
