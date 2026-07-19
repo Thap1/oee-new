@@ -15,5 +15,34 @@
   },
   "placeholder": {
     "comingLater": "This feature will be built in a later epic."
+  },
+  "masterData": {
+    "sites": "Sites",
+    "lines": "Lines",
+    "machines": "Machines",
+    "add": "Add",
+    "edit": "Edit",
+    "name": "Name",
+    "save": "Save",
+    "cancel": "Cancel",
+    "selectSitePrompt": "Select a Site to see its Lines",
+    "selectLinePrompt": "Select a Line to see its Machines",
+    "confirmDelete": "Delete \"{{name}}\"? This cannot be undone.",
+    "shiftSchedules": "Shift Schedules",
+    "selectSiteForShiftsPrompt": "Select a Site to see its Shift Schedules",
+    "allLines": "All Lines (site-wide)",
+    "shiftLine": "Line (optional)",
+    "startTime": "Start Time",
+    "endTime": "End Time",
+    "confirmDeleteShift": "Delete shift \"{{name}}\"? This cannot be undone.",
+    "error": {
+      "notFound": "This record no longer exists. The list has been refreshed.",
+      "parentNotFound": "The parent record no longer exists. Please refresh.",
+      "hasDependents": "Cannot delete — it still has: {{dependents}}",
+      "shiftOverlap": "This shift overlaps an existing one: {{message}}",
+      "validationError": "Invalid data: {{message}}",
+      "forbidden": "You do not have permission to perform this action.",
+      "generic": "Something went wrong. Please try again."
+    }
   }
 }

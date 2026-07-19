@@ -1,0 +1,101 @@
+import { HttpClient } from '@angular/common/http';
+import { Injectable } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+
+export interface SiteDto {
+  id: string;
+  name: string;
+}
+
+export interface LineDto {
+  id: string;
+  name: string;
+  siteId: string;
+}
+
+export interface MachineDto {
+  id: string;
+  name: string;
+  lineId: string;
+}
+
+export interface ShiftScheduleDto {
+  id: string;
+  siteId: string;
+  lineId: string | null;
+  name: string;
+  startTime: string;
+  endTime: string;
+}
+
+/** Site &gt; Line &gt; Machine CRUD (Story 1.2, FR-011). Reads: any role. Writes: Admin only (enforced server-side). */
+@Injectable({ providedIn: 'root' })
+export class MasterDataService {
+  constructor(private readonly http: HttpClient) {}
+
+  listSites(): Promise<SiteDto[]> {
+    return firstValueFrom(this.http.get<SiteDto[]>('/api/master-data/sites'));
+  }
+
+  createSite(name: string): Promise<SiteDto> {
+    return firstValueFrom(this.http.post<SiteDto>('/api/master-data/sites', { name }));
+  }
+
+  renameSite(id: string, name: string): Promise<SiteDto> {
+    return firstValueFrom(this.http.put<SiteDto>(`/api/master-data/sites/${id}`, { name }));
+  }
+
+  deleteSite(id: string): Promise<void> {
+    return firstValueFrom(this.http.delete<void>(`/api/master-data/sites/${id}`));
+  }
+
+  listLines(siteId: string): Promise<LineDto[]> {
+    return firstValueFrom(this.http.get<LineDto[]>(`/api/master-data/sites/${siteId}/lines`));
+  }
+
+  createLine(siteId: string, name: string): Promise<LineDto> {
+    return firstValueFrom(this.http.post<LineDto>(`/api/master-data/sites/${siteId}/lines`, { name }));
+  }
+
+  renameLine(id: string, name: string): Promise<LineDto> {
+    return firstValueFrom(this.http.put<LineDto>(`/api/master-data/lines/${id}`, { name }));
+  }
+
+  deleteLine(id: string): Promise<void> {
+    return firstValueFrom(this.http.delete<void>(`/api/master-data/lines/${id}`));
+  }
+
+  listMachines(lineId: string): Promise<MachineDto[]> {
+    return firstValueFrom(this.http.get<MachineDto[]>(`/api/master-data/lines/${lineId}/machines`));
+  }
+
+  createMachine(lineId: string, name: string): Promise<MachineDto> {
+    return firstValueFrom(this.http.post<MachineDto>(`/api/master-data/lines/${lineId}/machines`, { name }));
+  }
+
+  renameMachine(id: string, name: string): Promise<MachineDto> {
+    return firstValueFrom(this.http.put<MachineDto>(`/api/master-data/machines/${id}`, { name }));
+  }
+
+  deleteMachine(id: string): Promise<void> {
+    return firstValueFrom(this.http.delete<void>(`/api/master-data/machines/${id}`));
+  }
+
+  listShiftSchedules(siteId: string): Promise<ShiftScheduleDto[]> {
+    return firstValueFrom(this.http.get<ShiftScheduleDto[]>(`/api/master-data/sites/${siteId}/shift-schedules`));
+  }
+
+  createShiftSchedule(siteId: string, name: string, lineId: string | null, startTime: string, endTime: string): Promise<ShiftScheduleDto> {
+    return firstValueFrom(
+      this.http.post<ShiftScheduleDto>(`/api/master-data/sites/${siteId}/shift-schedules`, { name, lineId, startTime, endTime }),
+    );
+  }
+
+  rescheduleShiftSchedule(id: string, name: string, startTime: string, endTime: string): Promise<ShiftScheduleDto> {
+    return firstValueFrom(this.http.put<ShiftScheduleDto>(`/api/master-data/shift-schedules/${id}`, { name, startTime, endTime }));
+  }
+
+  deleteShiftSchedule(id: string): Promise<void> {
+    return firstValueFrom(this.http.delete<void>(`/api/master-data/shift-schedules/${id}`));
+  }
+}

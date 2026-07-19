@@ -2,10 +2,13 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OeeNew.Api.Errors;
 using OeeNew.Application.Auth;
+using OeeNew.Application.MasterData;
 using OeeNew.Infrastructure.Identity;
+using OeeNew.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,6 +24,18 @@ builder.Services.AddSingleton<IJwtSigningKeyProvider, RsaJwtSigningKeyProvider>(
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 builder.Services.AddSingleton<IUserAuthenticator, BootstrapUserAuthenticator>();
 builder.Services.AddScoped<LoginUseCase>();
+
+// Master data (Story 1.2 — FR-011): EF Core + local Postgres (AD-2, one instance per Site/Central).
+builder.Services.AddDbContext<OeeDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+builder.Services.AddScoped<ISiteRepository, SiteRepository>();
+builder.Services.AddScoped<ILineRepository, LineRepository>();
+builder.Services.AddScoped<IMachineRepository, MachineRepository>();
+builder.Services.AddScoped<IShiftScheduleRepository, ShiftScheduleRepository>();
+builder.Services.AddScoped<SiteManagementUseCase>();
+builder.Services.AddScoped<LineManagementUseCase>();
+builder.Services.AddScoped<MachineManagementUseCase>();
+builder.Services.AddScoped<ShiftScheduleManagementUseCase>();
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();

@@ -1,0 +1,80 @@
+using OeeNew.Application.MasterData;
+using Xunit;
+
+namespace OeeNew.Application.Tests.MasterData;
+
+public class MachineManagementUseCaseTests
+{
+    [Fact]
+    public async Task CreateAsync_WithExistingLine_PersistsMachine()
+    {
+        var siteRepo = new FakeSiteRepository();
+        var lineRepo = new FakeLineRepository();
+        var siteId = siteRepo.Seed("Site A");
+        var lineId = lineRepo.Seed("Line A", siteId);
+        var useCase = new MachineManagementUseCase(new FakeMachineRepository(), lineRepo);
+
+        var machine = await useCase.CreateAsync("Admin", lineId, "Machine A");
+
+        Assert.NotEqual(Guid.Empty, machine.Id);
+        Assert.Equal(lineId, machine.LineId);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithUnknownLine_ThrowsParentNotFound()
+    {
+        var useCase = new MachineManagementUseCase(new FakeMachineRepository(), new FakeLineRepository());
+
+        await Assert.ThrowsAsync<MasterDataParentNotFoundException>(() => useCase.CreateAsync("Admin", Guid.NewGuid(), "Machine A"));
+    }
+
+    [Fact]
+    public async Task CreateAsync_AsNonAdmin_ThrowsForbidden()
+    {
+        var siteRepo = new FakeSiteRepository();
+        var lineRepo = new FakeLineRepository();
+        var siteId = siteRepo.Seed("Site A");
+        var lineId = lineRepo.Seed("Line A", siteId);
+        var useCase = new MachineManagementUseCase(new FakeMachineRepository(), lineRepo);
+
+        await Assert.ThrowsAsync<MasterDataForbiddenException>(() => useCase.CreateAsync("Viewer", lineId, "Machine A"));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WithExistingMachine_RemovesIt()
+    {
+        var siteRepo = new FakeSiteRepository();
+        var lineRepo = new FakeLineRepository();
+        var machineRepo = new FakeMachineRepository();
+        var siteId = siteRepo.Seed("Site A");
+        var lineId = lineRepo.Seed("Line A", siteId);
+        var machineId = machineRepo.Seed("Machine A", lineId);
+        var useCase = new MachineManagementUseCase(machineRepo, lineRepo);
+
+        await useCase.DeleteAsync("Admin", machineId);
+
+        Assert.Null(await machineRepo.GetAsync(machineId));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WithUnknownMachine_ThrowsNotFound()
+    {
+        var useCase = new MachineManagementUseCase(new FakeMachineRepository(), new FakeLineRepository());
+
+        await Assert.ThrowsAsync<MasterDataNotFoundException>(() => useCase.DeleteAsync("Admin", Guid.NewGuid()));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_AsNonAdmin_ThrowsForbidden()
+    {
+        var siteRepo = new FakeSiteRepository();
+        var lineRepo = new FakeLineRepository();
+        var machineRepo = new FakeMachineRepository();
+        var siteId = siteRepo.Seed("Site A");
+        var lineId = lineRepo.Seed("Line A", siteId);
+        var machineId = machineRepo.Seed("Machine A", lineId);
+        var useCase = new MachineManagementUseCase(machineRepo, lineRepo);
+
+        await Assert.ThrowsAsync<MasterDataForbiddenException>(() => useCase.DeleteAsync("Viewer", machineId));
+    }
+}

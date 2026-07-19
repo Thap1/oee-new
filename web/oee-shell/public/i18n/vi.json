@@ -15,5 +15,34 @@
   },
   "placeholder": {
     "comingLater": "Tính năng này sẽ được xây dựng ở epic sau."
+  },
+  "masterData": {
+    "sites": "Site",
+    "lines": "Line",
+    "machines": "Máy",
+    "add": "Thêm",
+    "edit": "Sửa",
+    "name": "Tên",
+    "save": "Lưu",
+    "cancel": "Huỷ",
+    "selectSitePrompt": "Chọn một Site để xem các Line",
+    "selectLinePrompt": "Chọn một Line để xem các Máy",
+    "confirmDelete": "Xoá \"{{name}}\"? Hành động này không thể hoàn tác.",
+    "shiftSchedules": "Ca làm việc",
+    "selectSiteForShiftsPrompt": "Chọn một Site để xem các Ca làm việc",
+    "allLines": "Tất cả Line (toàn Site)",
+    "shiftLine": "Line (tuỳ chọn)",
+    "startTime": "Giờ bắt đầu",
+    "endTime": "Giờ kết thúc",
+    "confirmDeleteShift": "Xoá ca \"{{name}}\"? Hành động này không thể hoàn tác.",
+    "error": {
+      "notFound": "Bản ghi này không còn tồn tại. Danh sách đã được làm mới.",
+      "parentNotFound": "Bản ghi cha không còn tồn tại. Vui lòng làm mới.",
+      "hasDependents": "Không thể xoá — vẫn còn: {{dependents}}",
+      "shiftOverlap": "Ca này chồng lấn với ca đã có: {{message}}",
+      "validationError": "Dữ liệu không hợp lệ: {{message}}",
+      "forbidden": "Bạn không có quyền thực hiện thao tác này.",
+      "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+    }
   }
 }
