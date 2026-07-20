@@ -150,3 +150,34 @@ internal sealed class FakeShiftScheduleRepository : IShiftScheduleRepository
         return shift.Id;
     }
 }
+
+internal sealed class FakeReasonCodeRepository : IReasonCodeRepository
+{
+    private readonly Dictionary<Guid, ReasonCode> _reasonCodes = new();
+
+    public Task<ReasonCode> AddAsync(ReasonCode reasonCode, CancellationToken cancellationToken = default)
+    {
+        var persisted = new ReasonCode(Guid.NewGuid(), reasonCode.SiteId, reasonCode.Name, reasonCode.LossCategory);
+        _reasonCodes[persisted.Id] = persisted;
+        return Task.FromResult(persisted);
+    }
+
+    public Task<ReasonCode?> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_reasonCodes.GetValueOrDefault(id));
+
+    public Task<IReadOnlyList<ReasonCode>> ListBySiteAsync(Guid siteId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ReasonCode>>(_reasonCodes.Values.Where(r => r.SiteId == siteId).ToList());
+
+    public Task UpdateAsync(ReasonCode reasonCode, CancellationToken cancellationToken = default)
+    {
+        _reasonCodes[reasonCode.Id] = reasonCode;
+        return Task.CompletedTask;
+    }
+
+    public Guid Seed(Guid siteId, string name, LossCategory lossCategory)
+    {
+        var reasonCode = new ReasonCode(Guid.NewGuid(), siteId, name, lossCategory);
+        _reasonCodes[reasonCode.Id] = reasonCode;
+        return reasonCode.Id;
+    }
+}

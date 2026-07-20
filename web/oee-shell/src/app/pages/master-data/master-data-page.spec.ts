@@ -28,6 +28,19 @@ const I18N_VI = {
     startTime: 'Giờ bắt đầu',
     endTime: 'Giờ kết thúc',
     confirmDeleteShift: 'Xoá ca "{{name}}"?',
+    reasonCodes: 'Mã lý do',
+    selectSiteForReasonCodesPrompt: 'Chọn một Site để xem Mã lý do',
+    active: 'Đang dùng',
+    inactive: 'Ngưng dùng',
+    deactivate: 'Ngưng dùng',
+    lossCategory: {
+      label: 'Nhóm tổn thất',
+      AvailabilityLoss: 'Tổn thất khả dụng',
+      PerformanceLoss: 'Tổn thất hiệu suất',
+      QualityLoss: 'Tổn thất chất lượng',
+    },
+    users: 'Người dùng',
+    role: { label: 'Vai trò', admin: 'Admin', manager: 'Manager', operator: 'Operator', viewer: 'Viewer' },
     error: {
       notFound: 'Không tìm thấy.',
       parentNotFound: 'Không tìm thấy bản ghi cha.',
@@ -35,6 +48,7 @@ const I18N_VI = {
       shiftOverlap: 'Chồng lấn: {{message}}',
       validationError: 'Không hợp lệ: {{message}}',
       forbidden: 'Không có quyền.',
+      usernameTaken: 'Tên đăng nhập đã được sử dụng.',
       generic: 'Đã xảy ra lỗi.',
     },
   },
@@ -64,6 +78,9 @@ async function setUp(role: string) {
 
   httpMock.expectOne('/i18n/vi.json').flush(I18N_VI);
   httpMock.expectOne('/api/master-data/sites').flush([{ id: 'site-1', name: 'Site A' }]);
+  if (role === 'Admin') {
+    httpMock.expectOne('/api/users').flush([]);
+  }
   await flushMicrotasks();
   fixture.detectChanges();
 
@@ -154,6 +171,7 @@ describe('MasterDataPage', () => {
     httpMock
       .expectOne('/api/master-data/sites/site-1/shift-schedules')
       .flush([{ id: 'shift-1', siteId: 'site-1', lineId: null, name: 'Day Shift', startTime: '08:00:00', endTime: '16:00:00' }]);
+    httpMock.expectOne('/api/master-data/sites/site-1/reason-codes').flush([]);
     await selectPromise;
     fixture.detectChanges();
 
@@ -171,6 +189,7 @@ describe('MasterDataPage', () => {
     const selectPromise = component.selectSite({ id: 'site-1', name: 'Site A' });
     httpMock.expectOne('/api/master-data/sites/site-1/lines').flush([]);
     httpMock.expectOne('/api/master-data/sites/site-1/shift-schedules').flush([]);
+    httpMock.expectOne('/api/master-data/sites/site-1/reason-codes').flush([]);
     await selectPromise;
     fixture.detectChanges();
 
@@ -207,6 +226,7 @@ describe('MasterDataPage', () => {
     const selectPromise = component.selectSite({ id: 'site-1', name: 'Site A' });
     httpMock.expectOne('/api/master-data/sites/site-1/lines').flush([]);
     httpMock.expectOne('/api/master-data/sites/site-1/shift-schedules').flush([]);
+    httpMock.expectOne('/api/master-data/sites/site-1/reason-codes').flush([]);
     await selectPromise;
     fixture.detectChanges();
 
@@ -265,6 +285,7 @@ describe('MasterDataPage', () => {
     httpMock
       .expectOne('/api/master-data/sites/site-1/shift-schedules')
       .flush([{ id: 'shift-1', siteId: 'site-1', lineId: null, name: 'Day Shift', startTime: '08:00:00', endTime: '16:00:00' }]);
+    httpMock.expectOne('/api/master-data/sites/site-1/reason-codes').flush([]);
     await selectPromise;
     fixture.detectChanges();
 
@@ -273,6 +294,155 @@ describe('MasterDataPage', () => {
     expect(component.shiftSchedules()).toEqual([]);
 
     window.confirm = originalConfirm;
+    httpMock.verify();
+  });
+
+  it('creating a Reason Code always sends a LossCategory (no blank option) and appends it to the list', async () => {
+    const { fixture, httpMock } = await setUp('Admin');
+    const component = fixture.componentInstance;
+
+    const selectPromise = component.selectSite({ id: 'site-1', name: 'Site A' });
+    httpMock.expectOne('/api/master-data/sites/site-1/lines').flush([]);
+    httpMock.expectOne('/api/master-data/sites/site-1/shift-schedules').flush([]);
+    httpMock.expectOne('/api/master-data/sites/site-1/reason-codes').flush([]);
+    await selectPromise;
+    fixture.detectChanges();
+
+    component.openCreateReasonCode();
+    expect(component.reasonDialogLossCategory()).toBe('AvailabilityLoss');
+    component.reasonDialogName.set('Changeover');
+    const savePromise = component.saveReasonCode();
+
+    const req = httpMock.expectOne('/api/master-data/sites/site-1/reason-codes');
+    expect(req.request.body).toEqual({ name: 'Changeover', lossCategory: 'AvailabilityLoss' });
+    req.flush({ id: 'reason-1', siteId: 'site-1', name: 'Changeover', lossCategory: 'AvailabilityLoss', isActive: true });
+    await savePromise;
+    fixture.detectChanges();
+
+    expect(component.reasonCodes()).toContainEqual({
+      id: 'reason-1',
+      siteId: 'site-1',
+      name: 'Changeover',
+      lossCategory: 'AvailabilityLoss',
+      isActive: true,
+    });
+    expect(component.reasonDialog().visible).toBe(false);
+
+    httpMock.verify();
+  });
+
+  it('deactivating a Reason Code keeps the record but marks it inactive', async () => {
+    const { fixture, httpMock } = await setUp('Admin');
+    const component = fixture.componentInstance;
+
+    const selectPromise = component.selectSite({ id: 'site-1', name: 'Site A' });
+    httpMock.expectOne('/api/master-data/sites/site-1/lines').flush([]);
+    httpMock.expectOne('/api/master-data/sites/site-1/shift-schedules').flush([]);
+    httpMock
+      .expectOne('/api/master-data/sites/site-1/reason-codes')
+      .flush([{ id: 'reason-1', siteId: 'site-1', name: 'Changeover', lossCategory: 'AvailabilityLoss', isActive: true }]);
+    await selectPromise;
+    fixture.detectChanges();
+
+    const deactivatePromise = component.deactivateReasonCode(component.reasonCodes()[0]);
+    const req = httpMock.expectOne('/api/master-data/reason-codes/reason-1/deactivate');
+    expect(req.request.method).toBe('PUT');
+    req.flush({ id: 'reason-1', siteId: 'site-1', name: 'Changeover', lossCategory: 'AvailabilityLoss', isActive: false });
+    await deactivatePromise;
+    fixture.detectChanges();
+
+    expect(component.reasonCodes()).toContainEqual({
+      id: 'reason-1',
+      siteId: 'site-1',
+      name: 'Changeover',
+      lossCategory: 'AvailabilityLoss',
+      isActive: false,
+    });
+
+    httpMock.verify();
+  });
+
+  it('shows the Users panel and add-user button for an Admin', async () => {
+    const { fixture, httpMock } = await setUp('Admin');
+    expect(fixture.nativeElement.querySelector('[data-testid="add-user-btn"]')).toBeTruthy();
+    httpMock.verify();
+  });
+
+  it('hides the add-user button for a non-Admin', async () => {
+    const { fixture, httpMock } = await setUp('Manager');
+    expect(fixture.nativeElement.querySelector('[data-testid="add-user-btn"]')).toBeNull();
+    httpMock.verify();
+  });
+
+  it('hides Site/Line scope fields when creating an Admin user, shows Site only for Manager, and Site+Line for Operator', async () => {
+    const { fixture, httpMock } = await setUp('Admin');
+    const component = fixture.componentInstance;
+    component.openCreateUser();
+    component.onUserRoleChange('Admin');
+    fixture.detectChanges();
+
+    expect(component.showUserScopeFields()).toBe(false);
+
+    component.onUserRoleChange('Manager');
+    fixture.detectChanges();
+    expect(component.showUserScopeFields()).toBe(true);
+    expect(component.showUserLineField()).toBe(false);
+
+    component.onUserRoleChange('Operator');
+    fixture.detectChanges();
+    expect(component.showUserScopeFields()).toBe(true);
+    expect(component.showUserLineField()).toBe(true);
+
+    httpMock.verify();
+  });
+
+  it('creating an Operator loads Lines for the selected Sites and posts the assembled scope', async () => {
+    const { fixture, httpMock } = await setUp('Admin');
+    const component = fixture.componentInstance;
+
+    component.openCreateUser();
+    component.onUserRoleChange('Operator');
+    const siteIdsPromise = component.onUserSiteIdsChange(['site-1']);
+    httpMock.expectOne('/api/master-data/sites/site-1/lines').flush([{ id: 'line-1', name: 'Line A', siteId: 'site-1' }]);
+    await siteIdsPromise;
+    fixture.detectChanges();
+
+    expect(component.userDialogLineOptions()).toEqual([{ id: 'line-1', name: 'Line A', siteId: 'site-1' }]);
+
+    component.userDialogUsername.set('op1');
+    component.userDialogPassword.set('Passw0rd!');
+    component.userDialogLineIds.set(['line-1']);
+    const savePromise = component.saveUser();
+
+    const req = httpMock.expectOne('/api/users');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ username: 'op1', password: 'Passw0rd!', role: 'Operator', siteIds: ['site-1'], lineIds: ['line-1'] });
+    req.flush({ id: 'user-1', username: 'op1', role: 'Operator', siteIds: ['site-1'], lineIds: ['line-1'] }, { status: 201, statusText: 'Created' });
+    await savePromise;
+    fixture.detectChanges();
+
+    expect(component.users()).toContainEqual({ id: 'user-1', username: 'op1', role: 'Operator', siteIds: ['site-1'], lineIds: ['line-1'] });
+    expect(component.userDialogVisible()).toBe(false);
+
+    httpMock.verify();
+  });
+
+  it('creating a User with a duplicate username shows the USERNAME_TAKEN error', async () => {
+    const { fixture, httpMock } = await setUp('Admin');
+    const component = fixture.componentInstance;
+
+    component.openCreateUser();
+    component.userDialogUsername.set('admin');
+    component.userDialogPassword.set('Passw0rd!');
+    const savePromise = component.saveUser();
+
+    const req = httpMock.expectOne('/api/users');
+    req.flush({ code: 'USERNAME_TAKEN', message: "Username 'admin' is already taken." }, { status: 409, statusText: 'Conflict' });
+    await savePromise;
+    fixture.detectChanges();
+
+    expect(component.error()).toContain('Tên đăng nhập đã được sử dụng');
+
     httpMock.verify();
   });
 });

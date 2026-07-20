@@ -4,7 +4,7 @@ baseline_commit: NO_VCS
 
 # Story 1.1: Đăng nhập & Khung ứng dụng nền tảng
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -46,6 +46,26 @@ so that I have a secure, correctly-scoped starting point before using any featur
   - [x] Unit test Domain (nếu có logic ở bước này) độc lập, không cần DB/HTTP
   - [x] Integration test API: login → JWT chứa đúng claim; request với token ký bằng key cũ (giả lập rotate) vẫn được chấp nhận; lỗi trả đúng envelope
   - [x] Angular: test sidebar ẩn/hiện theo role; test chuyển ngôn ngữ cập nhật DOM không reload
+
+### Review Findings
+
+- [x] [Review][Patch] No rate limiting/lockout on `POST /api/auth/login`, the only entry point to the single all-powerful bootstrap Admin account — add ASP.NET Core rate limiting middleware to the login endpoint. [src/OeeNew.Api/Controllers/AuthController.cs:19-24]
+- [x] [Review][Patch] Auth interceptor attaches the Bearer token to every outgoing request with no URL scoping and no 401 handling — scope it to same-origin API requests, and add `catchError` to trigger logout/redirect on 401. [web/oee-shell/src/app/core/auth/auth.interceptor.ts:9-17]
+- [x] [Review][Patch] No cross-tab session sync — `AuthService` never listens for the `storage` event, so logging out in one tab leaves other open tabs still authenticated until reload. [web/oee-shell/src/app/core/auth/auth.service.ts:20]
+- [x] [Review][Patch] Redundant JWT options binding — `Program.cs` registers `Configure<JwtOptions>` for DI and separately re-reads the same config section manually inside `AddJwtBearer`; resolve once via the injected `IOptions<JwtOptions>`. [src/OeeNew.Api/Program.cs:19,70]
+- [x] [Review][Patch] Retired signing keys are only disposed at provider shutdown (`Dispose()`) — once `RotateKey()` is ever called periodically in production, `_retired` and its RSA handles grow unboundedly. Dispose retired keys after a short grace period instead. [src/OeeNew.Infrastructure/Identity/RsaJwtSigningKeyProvider.cs:39-55]
+- [x] [Review][Patch] `AuthController.Me()` looks up `ClaimTypes.NameIdentifier`/`ClaimTypes.Name` first, but `MapInboundClaims = false` (Program.cs:74) means those never populate — the primary lookup is dead code. Simplify to look up `"sub"`/`"unique_name"` directly. [src/OeeNew.Api/Controllers/AuthController.cs:33-34]
+- [x] [Review][Patch] Login doesn't preserve the originally-requested route — `authGuard` redirects to `/login` with no `returnUrl`, and `Login.submit()` always navigates to `/dashboard`. Wire a `returnUrl` query param through both. [web/oee-shell/src/app/core/auth/auth.guard.ts:13, web/oee-shell/src/app/pages/login/login.ts:34]
+- [x] [Review][Patch] `HttpTranslateLoader.getTranslation` has no error handling for a failed i18n file fetch. [web/oee-shell/src/app/core/i18n/http-translate-loader.ts:17]
+- [x] [Review][Patch] Selected language isn't persisted — reload always resets to the fallback language. [web/oee-shell/src/app/core/layout/shell.ts:24-25]
+- [x] [Review][Patch] `OeeNew.Api.http` still has the default template's `/weatherforecast/` sample request, pointing at an endpoint that doesn't exist in this API. [src/OeeNew.Api/OeeNew.Api.http:3]
+- [x] [Review][Patch] SignalR package reference is missing from `OeeNew.Infrastructure.csproj` despite Task 1's checklist marking "EF Core+Npgsql+SignalR+JWT packages" as done. [src/OeeNew.Infrastructure/OeeNew.Infrastructure.csproj]
+- [x] [Review][Defer] Central Identity Provider isn't actually gated by `AppMode` — every instance runs its own local signing-key provider/JWKS endpoint regardless of `Site`/`Central` mode; no cross-instance federation exists yet. [src/OeeNew.Api/Program.cs:16-25, src/OeeNew.Infrastructure/Identity/RsaJwtSigningKeyProvider.cs:18-21] — deferred, pre-existing
+- [x] [Review][Defer] Signing keys are in-memory only and unique per process — a restart invalidates all outstanding tokens, and no multi-instance key sharing exists. [src/OeeNew.Infrastructure/Identity/RsaJwtSigningKeyProvider.cs:18-21] — deferred, pre-existing
+- [x] [Review][Defer] `RotateKey()` has no caller anywhere outside tests — no scheduled job or admin trigger exercises the rotation-overlap window in production. [src/OeeNew.Infrastructure/Identity/RsaJwtSigningKeyProvider.cs:39] — deferred, pre-existing
+- [x] [Review][Defer] Only the bootstrap Admin account can log in through the real pipeline; other roles are validated only against hand-built fake JWTs, not a real end-to-end login. Superseded by Story 1.4. [src/OeeNew.Infrastructure/Identity/BootstrapUserAuthenticator.cs] — deferred, pre-existing
+- [x] [Review][Defer] No client-side per-route role guard — only the sidebar hides links; a non-Admin user can still navigate directly to `/master-data` by URL (server-side enforcement is the real boundary per NFR-5). [web/oee-shell/src/app/core/auth/auth.guard.ts] — deferred, pre-existing
+- [x] [Review][Defer] 8-hour bearer token stored in `localStorage` with no refresh-token pattern or server-side revocation. [web/oee-shell/src/app/core/auth/auth.service.ts:47] — deferred, pre-existing
 
 ## Dev Notes
 

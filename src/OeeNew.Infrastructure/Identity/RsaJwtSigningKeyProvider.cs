@@ -10,10 +10,16 @@ namespace OeeNew.Infrastructure.Identity;
 /// </summary>
 public sealed class RsaJwtSigningKeyProvider : IJwtSigningKeyProvider, IDisposable
 {
+    // Long enough to outlast any in-flight validation racing a rotation; short enough that
+    // repeated rotation doesn't accumulate unbounded RSA handles (see RotateKey/DisposeRetiredKey).
+    private static readonly TimeSpan RetiredKeyGracePeriod = TimeSpan.FromMinutes(10);
+
     private readonly Lock _lock = new();
     private readonly List<SigningKeyEntry> _retired = [];
+    private readonly List<Timer> _retiredKeyTimers = [];
     private SigningKeyEntry _current;
     private SigningKeyEntry? _previous;
+    private bool _disposed;
 
     public RsaJwtSigningKeyProvider()
     {
@@ -43,14 +49,33 @@ public sealed class RsaJwtSigningKeyProvider : IJwtSigningKeyProvider, IDisposab
             // Don't dispose the outgoing "previous" key here: a concurrent request may still be
             // mid-validation against it (GetValidationKeys() hands out the live RSA instance, and
             // the actual signature check happens outside this lock, in the JWT bearer pipeline).
-            // Retire it instead and dispose only when the provider itself is torn down.
+            // Retire it and dispose after a grace period instead — not only at provider shutdown,
+            // since a long-running process may rotate many times over its lifetime.
             if (_previous is not null)
             {
-                _retired.Add(_previous);
+                var retiring = _previous;
+                _retired.Add(retiring);
+                _retiredKeyTimers.Add(new Timer(_ => DisposeRetiredKey(retiring), null, RetiredKeyGracePeriod, Timeout.InfiniteTimeSpan));
             }
 
             _previous = _current;
             _current = CreateKey();
+        }
+    }
+
+    private void DisposeRetiredKey(SigningKeyEntry entry)
+    {
+        lock (_lock)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (_retired.Remove(entry))
+            {
+                entry.Rsa.Dispose();
+            }
         }
     }
 
@@ -60,6 +85,8 @@ public sealed class RsaJwtSigningKeyProvider : IJwtSigningKeyProvider, IDisposab
     {
         lock (_lock)
         {
+            _disposed = true;
+
             _current.Rsa.Dispose();
             _previous?.Rsa.Dispose();
             foreach (var retired in _retired)
@@ -67,6 +94,12 @@ public sealed class RsaJwtSigningKeyProvider : IJwtSigningKeyProvider, IDisposab
                 retired.Rsa.Dispose();
             }
             _retired.Clear();
+
+            foreach (var timer in _retiredKeyTimers)
+            {
+                timer.Dispose();
+            }
+            _retiredKeyTimers.Clear();
         }
     }
 }

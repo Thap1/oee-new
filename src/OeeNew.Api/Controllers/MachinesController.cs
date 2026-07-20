@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OeeNew.Api.Auth;
 using OeeNew.Application.Auth;
 using OeeNew.Application.MasterData;
 using OeeNew.Domain.MasterData;
@@ -20,7 +21,7 @@ public sealed class MachinesController(MachineManagementUseCase useCase) : Contr
     [HttpGet("api/master-data/lines/{lineId:guid}/machines")]
     public async Task<ActionResult<IReadOnlyList<MachineResponse>>> ListByLine(Guid lineId, CancellationToken cancellationToken)
     {
-        var machines = await useCase.ListByLineAsync(lineId, cancellationToken);
+        var machines = await useCase.ListByLineAsync(User.GetCallerScope(), lineId, cancellationToken);
         return Ok(machines.Select(ToResponse).ToList());
     }
 

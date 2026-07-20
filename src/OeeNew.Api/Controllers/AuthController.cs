@@ -1,7 +1,9 @@
 using System.ComponentModel.DataAnnotations;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using OeeNew.Application.Auth;
 
 namespace OeeNew.Api.Controllers;
@@ -17,6 +19,7 @@ public sealed record CurrentUserResponse(string UserId, string Username, string 
 public sealed class AuthController(LoginUseCase loginUseCase) : ControllerBase
 {
     [HttpPost("login")]
+    [EnableRateLimiting("login")]
     public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
     {
         var issued = await loginUseCase.ExecuteAsync(request.Username, request.Password, cancellationToken);
@@ -29,9 +32,11 @@ public sealed class AuthController(LoginUseCase loginUseCase) : ControllerBase
     public ActionResult<CurrentUserResponse> Me()
     {
         var user = HttpContext.User;
+        // MapInboundClaims = false (Program.cs) means the JWT's own claim names ("sub",
+        // "unique_name") are preserved as-is — no legacy ClaimTypes.* remapping ever populates them.
         var response = new CurrentUserResponse(
-            UserId: user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub") ?? string.Empty,
-            Username: user.FindFirstValue(ClaimTypes.Name) ?? user.FindFirstValue("unique_name") ?? string.Empty,
+            UserId: user.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? string.Empty,
+            Username: user.FindFirstValue(JwtRegisteredClaimNames.UniqueName) ?? string.Empty,
             Role: user.FindFirstValue(OeeClaimTypes.Role) ?? string.Empty,
             SiteIds: user.FindAll(OeeClaimTypes.SiteId).Select(c => c.Value).ToList(),
             LineIds: user.FindAll(OeeClaimTypes.LineId).Select(c => c.Value).ToList());

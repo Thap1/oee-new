@@ -1,12 +1,25 @@
+using OeeNew.Application.Auth;
 using OeeNew.Domain.MasterData;
 
 namespace OeeNew.Application.MasterData;
 
-/// <summary>Create/rename/delete/list Machines under a Line (Story 1.2, AC #3 — FR-011). Admin-only, re-checked here in addition to the API-layer policy.</summary>
+/// <summary>Create/rename/delete/list Machines under a Line (Story 1.2, AC #3 — FR-011; scope-filtered per Story 1.6, AC #2/#4). Admin-only for writes, re-checked here in addition to the API-layer policy.</summary>
 public sealed class MachineManagementUseCase(IMachineRepository machines, ILineRepository lines)
 {
-    public Task<IReadOnlyList<Machine>> ListByLineAsync(Guid lineId, CancellationToken cancellationToken = default) =>
-        machines.ListByLineAsync(lineId, cancellationToken);
+    public async Task<IReadOnlyList<Machine>> ListByLineAsync(CallerScope scope, Guid lineId, CancellationToken cancellationToken = default)
+    {
+        if (!scope.IsGlobal)
+        {
+            // A nonexistent line has no machines either way — nothing to check, nothing to leak.
+            var line = await lines.GetAsync(lineId, cancellationToken);
+            if (line is not null && (!scope.AllowsSite(line.SiteId) || !scope.AllowsLine(lineId)))
+            {
+                throw new MasterDataForbiddenException();
+            }
+        }
+
+        return await machines.ListByLineAsync(lineId, cancellationToken);
+    }
 
     public async Task<Machine> CreateAsync(string? callerRole, Guid lineId, string name, CancellationToken cancellationToken = default)
     {

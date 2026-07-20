@@ -1,12 +1,16 @@
+using OeeNew.Application.Auth;
 using OeeNew.Domain.MasterData;
 
 namespace OeeNew.Application.MasterData;
 
-/// <summary>Create/rename/delete/list Sites (Story 1.2, AC #1, #5 — FR-011). Admin-only, re-checked here in addition to the API-layer policy.</summary>
+/// <summary>Create/rename/delete/list Sites (Story 1.2, AC #1, #5 — FR-011; scope-filtered per Story 1.6, AC #2/#4). Admin-only for writes, re-checked here in addition to the API-layer policy.</summary>
 public sealed class SiteManagementUseCase(ISiteRepository sites, ILineRepository lines)
 {
-    public Task<IReadOnlyList<Site>> ListAsync(CancellationToken cancellationToken = default) =>
-        sites.ListAsync(cancellationToken);
+    public async Task<IReadOnlyList<Site>> ListAsync(CallerScope scope, CancellationToken cancellationToken = default)
+    {
+        var all = await sites.ListAsync(cancellationToken);
+        return scope.IsGlobal ? all : all.Where(s => scope.AllowsSite(s.Id)).ToList();
+    }
 
     public Task<Site> CreateAsync(string? callerRole, string name, CancellationToken cancellationToken = default)
     {

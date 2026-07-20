@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OeeNew.Api.Auth;
 using OeeNew.Application.Auth;
 using OeeNew.Application.MasterData;
 using OeeNew.Domain.MasterData;
@@ -20,7 +21,7 @@ public sealed class ShiftSchedulesController(ShiftScheduleManagementUseCase useC
     [HttpGet("api/master-data/sites/{siteId:guid}/shift-schedules")]
     public async Task<ActionResult<IReadOnlyList<ShiftScheduleResponse>>> ListBySite(Guid siteId, CancellationToken cancellationToken)
     {
-        var shifts = await useCase.ListBySiteAsync(siteId, cancellationToken);
+        var shifts = await useCase.ListBySiteAsync(User.GetCallerScope(), siteId, cancellationToken);
         return Ok(shifts.Select(ToResponse).ToList());
     }
 

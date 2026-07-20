@@ -1,9 +1,18 @@
 <div class="shell">
   <header class="shell__topbar">
+    <button
+      type="button"
+      class="shell__sidebar-toggle"
+      (click)="toggleSidebar()"
+      data-testid="sidebar-toggle"
+      aria-label="Toggle sidebar"
+    >
+      <i class="pi pi-bars"></i>
+    </button>
+
     <div class="shell__brand">OEE</div>
 
-    <!-- Site/Line selector: full implementation (progressive disclosure, UX-DR3) lands in Story 1.6 -->
-    <div class="shell__site-selector-placeholder"></div>
+    <app-site-line-selector />
 
     <div class="shell__topbar-actions">
       <button
@@ -25,19 +34,17 @@
         EN
       </button>
 
-      <p-button
-        [label]="'nav.logout' | translate"
-        icon="pi pi-sign-out"
-        severity="secondary"
-        size="small"
-        (onClick)="logout()"
-        data-testid="logout-btn"
-      />
+      <button type="button" class="shell__user-menu-trigger" (click)="userMenu.toggle($event)" data-testid="user-menu-trigger">
+        <p-avatar [label]="userInitial()" shape="circle" size="normal" />
+        <span class="shell__username">{{ username() }}</span>
+        <i class="pi pi-chevron-down"></i>
+      </button>
+      <p-menu #userMenu [popup]="true" [model]="userMenuItems()" data-testid="user-menu" />
     </div>
   </header>
 
   <div class="shell__body">
-    <nav class="shell__sidebar" data-testid="sidebar">
+    <nav class="shell__sidebar" [class.shell__sidebar--collapsed]="sidebarCollapsed()" data-testid="sidebar">
       @for (item of menuItems(); track item.route) {
         <a
           [routerLink]="item.route"

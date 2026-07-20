@@ -26,11 +26,14 @@ public sealed class MasterDataApiFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>Mints a signed JWT for an arbitrary role without going through the bootstrap-admin login flow — used to test AC #4 (non-Admin write rejection) ahead of Story 1.4's real multi-user login.</summary>
-    public string CreateTokenFor(string role)
+    public string CreateTokenFor(string role) => CreateTokenFor(role, siteIds: [], lineIds: []);
+
+    /// <summary>Mints a signed JWT scoped to specific Site/Line ids (Story 1.6, AC #2/#4) — used to test scope-filtered reads without a real persisted User.</summary>
+    public string CreateTokenFor(string role, Guid[] siteIds, Guid[] lineIds)
     {
         using var scope = Services.CreateScope();
         var jwtTokenService = scope.ServiceProvider.GetRequiredService<IJwtTokenService>();
-        var user = new AuthenticatedUser(Guid.NewGuid(), $"{role.ToLowerInvariant()}-user", role, SiteIds: [], LineIds: []);
+        var user = new AuthenticatedUser(Guid.NewGuid(), $"{role.ToLowerInvariant()}-user", role, SiteIds: siteIds, LineIds: lineIds);
         return jwtTokenService.CreateToken(user).AccessToken;
     }
 }

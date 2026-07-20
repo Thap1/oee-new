@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OeeNew.Api.Auth;
 using OeeNew.Application.Auth;
 using OeeNew.Application.MasterData;
 using OeeNew.Domain.MasterData;
@@ -21,7 +22,7 @@ public sealed class SitesController(SiteManagementUseCase useCase) : ControllerB
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<SiteResponse>>> List(CancellationToken cancellationToken)
     {
-        var sites = await useCase.ListAsync(cancellationToken);
+        var sites = await useCase.ListAsync(User.GetCallerScope(), cancellationToken);
         return Ok(sites.Select(ToResponse).ToList());
     }
 

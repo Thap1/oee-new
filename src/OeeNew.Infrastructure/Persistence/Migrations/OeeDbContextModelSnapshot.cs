@@ -22,6 +22,43 @@ namespace OeeNew.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("OeeNew.Domain.Identity.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuidv7()");
+
+                    b.PrimitiveCollection<Guid[]>("LineIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.PrimitiveCollection<Guid[]>("SiteIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Username")
+                        .IsUnique();
+
+                    b.ToTable("User", (string)null);
+                });
+
             modelBuilder.Entity("OeeNew.Domain.MasterData.Line", b =>
                 {
                     b.Property<Guid>("Id")
@@ -64,6 +101,36 @@ namespace OeeNew.Infrastructure.Persistence.Migrations
                     b.HasIndex("LineId");
 
                     b.ToTable("Machine", (string)null);
+                });
+
+            modelBuilder.Entity("OeeNew.Domain.MasterData.ReasonCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuidv7()");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<short>("LossCategory")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId");
+
+                    b.ToTable("ReasonCode", (string)null);
                 });
 
             modelBuilder.Entity("OeeNew.Domain.MasterData.ShiftSchedule", b =>
@@ -130,6 +197,15 @@ namespace OeeNew.Infrastructure.Persistence.Migrations
                     b.HasOne("OeeNew.Domain.MasterData.Line", null)
                         .WithMany()
                         .HasForeignKey("LineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OeeNew.Domain.MasterData.ReasonCode", b =>
+                {
+                    b.HasOne("OeeNew.Domain.MasterData.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

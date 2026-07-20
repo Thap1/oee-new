@@ -54,4 +54,16 @@ describe('AuthService', () => {
     expect(service.isAuthenticated()).toBe(false);
     expect(localStorage.getItem('oee_access_token')).toBeNull();
   });
+
+  it('syncs logout from another tab via the storage event', async () => {
+    const token = fakeJwt({ sub: '1', role: 'Admin' });
+    const loginPromise = service.login('admin', 'ChangeMe123!');
+    httpMock.expectOne('/api/auth/login').flush({ accessToken: token, expiresAtUtc: new Date().toISOString() });
+    await loginPromise;
+    expect(service.isAuthenticated()).toBe(true);
+
+    window.dispatchEvent(new StorageEvent('storage', { key: 'oee_access_token', newValue: null }));
+
+    expect(service.isAuthenticated()).toBe(false);
+  });
 });

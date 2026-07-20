@@ -6,20 +6,28 @@
   }
 
   <div class="master-data__columns">
-    <section class="master-data__panel">
-      <header class="master-data__panel-header">
-        <h3>{{ 'masterData.sites' | translate }}</h3>
-        @if (isAdmin()) {
-          <p-button
-            icon="pi pi-plus"
-            [text]="true"
-            [label]="'masterData.add' | translate"
-            (onClick)="openCreate('site')"
-            data-testid="add-site-btn"
-          />
-        }
-      </header>
+    <p-card styleClass="master-data__panel">
+      <ng-template pTemplate="title">
+        <div class="master-data__panel-header">
+          <h3>{{ 'masterData.sites' | translate }}</h3>
+          @if (isAdmin()) {
+            <p-button
+              icon="pi pi-plus"
+              [text]="true"
+              [label]="'masterData.add' | translate"
+              (onClick)="openCreate('site')"
+              data-testid="add-site-btn"
+            />
+          }
+        </div>
+      </ng-template>
       <p-table [value]="sites()" dataKey="id">
+        <ng-template pTemplate="header">
+          <tr>
+            <th>{{ 'masterData.name' | translate }}</th>
+            <th class="master-data__actions">{{ 'masterData.actions' | translate }}</th>
+          </tr>
+        </ng-template>
         <ng-template pTemplate="body" let-site>
           <tr
             [class.master-data__row--selected]="selectedSite()?.id === site.id"
@@ -36,25 +44,33 @@
           </tr>
         </ng-template>
       </p-table>
-    </section>
+    </p-card>
 
-    <section class="master-data__panel">
-      <header class="master-data__panel-header">
-        <h3>{{ 'masterData.lines' | translate }}</h3>
-        @if (isAdmin() && selectedSite()) {
-          <p-button
-            icon="pi pi-plus"
-            [text]="true"
-            [label]="'masterData.add' | translate"
-            (onClick)="openCreate('line')"
-            data-testid="add-line-btn"
-          />
-        }
-      </header>
+    <p-card styleClass="master-data__panel">
+      <ng-template pTemplate="title">
+        <div class="master-data__panel-header">
+          <h3>{{ 'masterData.lines' | translate }}</h3>
+          @if (isAdmin() && selectedSite()) {
+            <p-button
+              icon="pi pi-plus"
+              [text]="true"
+              [label]="'masterData.add' | translate"
+              (onClick)="openCreate('line')"
+              data-testid="add-line-btn"
+            />
+          }
+        </div>
+      </ng-template>
       @if (!selectedSite()) {
         <p class="master-data__hint">{{ 'masterData.selectSitePrompt' | translate }}</p>
       } @else {
         <p-table [value]="lines()" dataKey="id">
+          <ng-template pTemplate="header">
+            <tr>
+              <th>{{ 'masterData.name' | translate }}</th>
+              <th class="master-data__actions">{{ 'masterData.actions' | translate }}</th>
+            </tr>
+          </ng-template>
           <ng-template pTemplate="body" let-line>
             <tr [class.master-data__row--selected]="selectedLine()?.id === line.id" (click)="selectLine(line)" [attr.data-testid]="'line-row-' + line.name">
               <td>{{ line.name }}</td>
@@ -68,25 +84,33 @@
           </ng-template>
         </p-table>
       }
-    </section>
+    </p-card>
 
-    <section class="master-data__panel">
-      <header class="master-data__panel-header">
-        <h3>{{ 'masterData.machines' | translate }}</h3>
-        @if (isAdmin() && selectedLine()) {
-          <p-button
-            icon="pi pi-plus"
-            [text]="true"
-            [label]="'masterData.add' | translate"
-            (onClick)="openCreate('machine')"
-            data-testid="add-machine-btn"
-          />
-        }
-      </header>
+    <p-card styleClass="master-data__panel">
+      <ng-template pTemplate="title">
+        <div class="master-data__panel-header">
+          <h3>{{ 'masterData.machines' | translate }}</h3>
+          @if (isAdmin() && selectedLine()) {
+            <p-button
+              icon="pi pi-plus"
+              [text]="true"
+              [label]="'masterData.add' | translate"
+              (onClick)="openCreate('machine')"
+              data-testid="add-machine-btn"
+            />
+          }
+        </div>
+      </ng-template>
       @if (!selectedLine()) {
         <p class="master-data__hint">{{ 'masterData.selectLinePrompt' | translate }}</p>
       } @else {
         <p-table [value]="machines()" dataKey="id">
+          <ng-template pTemplate="header">
+            <tr>
+              <th>{{ 'masterData.name' | translate }}</th>
+              <th class="master-data__actions">{{ 'masterData.actions' | translate }}</th>
+            </tr>
+          </ng-template>
           <ng-template pTemplate="body" let-machine>
             <tr [attr.data-testid]="'machine-row-' + machine.name">
               <td>{{ machine.name }}</td>
@@ -100,26 +124,37 @@
           </ng-template>
         </p-table>
       }
-    </section>
+    </p-card>
   </div>
 
-  <section class="master-data__panel master-data__panel--shifts">
-    <header class="master-data__panel-header">
-      <h3>{{ 'masterData.shiftSchedules' | translate }}</h3>
-      @if (isAdmin() && selectedSite()) {
-        <p-button
-          icon="pi pi-plus"
-          [text]="true"
-          [label]="'masterData.add' | translate"
-          (onClick)="openCreateShift()"
-          data-testid="add-shift-btn"
-        />
-      }
-    </header>
+  <p-card styleClass="master-data__panel master-data__panel--shifts">
+    <ng-template pTemplate="title">
+      <div class="master-data__panel-header">
+        <h3>{{ 'masterData.shiftSchedules' | translate }}</h3>
+        @if (isAdmin() && selectedSite()) {
+          <p-button
+            icon="pi pi-plus"
+            [text]="true"
+            [label]="'masterData.add' | translate"
+            (onClick)="openCreateShift()"
+            data-testid="add-shift-btn"
+          />
+        }
+      </div>
+    </ng-template>
     @if (!selectedSite()) {
       <p class="master-data__hint">{{ 'masterData.selectSiteForShiftsPrompt' | translate }}</p>
     } @else {
       <p-table [value]="shiftSchedules()" dataKey="id">
+        <ng-template pTemplate="header">
+          <tr>
+            <th>{{ 'masterData.name' | translate }}</th>
+            <th>{{ 'masterData.lines' | translate }}</th>
+            <th>{{ 'masterData.startTime' | translate }}</th>
+            <th>{{ 'masterData.endTime' | translate }}</th>
+            <th class="master-data__actions">{{ 'masterData.actions' | translate }}</th>
+          </tr>
+        </ng-template>
         <ng-template pTemplate="body" let-shift>
           <tr [attr.data-testid]="'shift-row-' + shift.name">
             <td>{{ shift.name }}</td>
@@ -136,55 +171,150 @@
         </ng-template>
       </p-table>
     }
-  </section>
+  </p-card>
+
+  <p-card styleClass="master-data__panel master-data__panel--reason-codes">
+    <ng-template pTemplate="title">
+      <div class="master-data__panel-header">
+        <h3>{{ 'masterData.reasonCodes' | translate }}</h3>
+        @if (isAdmin() && selectedSite()) {
+          <p-button
+            icon="pi pi-plus"
+            [text]="true"
+            [label]="'masterData.add' | translate"
+            (onClick)="openCreateReasonCode()"
+            data-testid="add-reason-code-btn"
+          />
+        }
+      </div>
+    </ng-template>
+    @if (!selectedSite()) {
+      <p class="master-data__hint">{{ 'masterData.selectSiteForReasonCodesPrompt' | translate }}</p>
+    } @else {
+      <p-table [value]="reasonCodes()" dataKey="id">
+        <ng-template pTemplate="header">
+          <tr>
+            <th>{{ 'masterData.name' | translate }}</th>
+            <th>{{ 'masterData.lossCategory.label' | translate }}</th>
+            <th>{{ 'masterData.status' | translate }}</th>
+            <th class="master-data__actions">{{ 'masterData.actions' | translate }}</th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-reasonCode>
+          <tr [attr.data-testid]="'reason-code-row-' + reasonCode.name" [class.master-data__row--inactive]="!reasonCode.isActive">
+            <td>{{ reasonCode.name }}</td>
+            <td>{{ ('masterData.lossCategory.' + reasonCode.lossCategory) | translate }}</td>
+            <td>{{ (reasonCode.isActive ? 'masterData.active' : 'masterData.inactive') | translate }}</td>
+            <td class="master-data__actions">
+              @if (isAdmin() && reasonCode.isActive) {
+                <p-button
+                  icon="pi pi-eye-slash"
+                  [text]="true"
+                  [label]="'masterData.deactivate' | translate"
+                  (onClick)="deactivateReasonCode(reasonCode)"
+                  data-testid="deactivate-reason-code-btn"
+                />
+              }
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    }
+  </p-card>
+
+  @if (isAdmin()) {
+    <p-card styleClass="master-data__panel master-data__panel--users">
+      <ng-template pTemplate="title">
+        <div class="master-data__panel-header">
+          <h3>{{ 'masterData.users' | translate }}</h3>
+          <p-button
+            icon="pi pi-plus"
+            [text]="true"
+            [label]="'masterData.add' | translate"
+            (onClick)="openCreateUser()"
+            data-testid="add-user-btn"
+          />
+        </div>
+      </ng-template>
+      <p-table [value]="users()" dataKey="id">
+        <ng-template pTemplate="header">
+          <tr>
+            <th>{{ 'login.username' | translate }}</th>
+            <th>{{ 'masterData.role.label' | translate }}</th>
+            <th>{{ 'masterData.sites' | translate }}</th>
+            <th>{{ 'masterData.lines' | translate }}</th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-user>
+          <tr [attr.data-testid]="'user-row-' + user.username">
+            <td>{{ user.username }}</td>
+            <td>{{ ('masterData.role.' + user.role.toLowerCase()) | translate }}</td>
+            <td>{{ user.siteIds.length }}</td>
+            <td>{{ user.lineIds.length }}</td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </p-card>
+  }
 
   <p-dialog
     [visible]="shiftDialog().visible"
     (visibleChange)="!$event && closeShiftDialog()"
     [modal]="true"
+    [style]="{ width: '28rem' }"
     [header]="(shiftDialog().mode === 'create' ? 'masterData.add' : 'masterData.edit') + ' ' + ('masterData.shiftSchedules' | translate)"
     data-testid="shift-dialog"
   >
-    <label for="shift-name">{{ 'masterData.name' | translate }}</label>
-    <input
-      pInputText
-      id="shift-name"
-      name="shift-name"
-      [ngModel]="shiftDialogName()"
-      (ngModelChange)="shiftDialogName.set($event)"
-      data-testid="shift-name-input"
-    />
+    <p-fluid>
+      <div class="master-data__field">
+        <label for="shift-name">{{ 'masterData.name' | translate }}</label>
+        <input
+          pInputText
+          id="shift-name"
+          name="shift-name"
+          [ngModel]="shiftDialogName()"
+          (ngModelChange)="shiftDialogName.set($event)"
+          data-testid="shift-name-input"
+        />
+      </div>
 
-    <label for="shift-line">{{ 'masterData.shiftLine' | translate }}</label>
-    <p-select
-      id="shift-line"
-      [options]="shiftLineOptions()"
-      optionLabel="name"
-      optionValue="id"
-      [ngModel]="shiftDialogLineId()"
-      (ngModelChange)="shiftDialogLineId.set($event)"
-      data-testid="shift-line-select"
-    />
+      <div class="master-data__field">
+        <label for="shift-line">{{ 'masterData.shiftLine' | translate }}</label>
+        <p-select
+          id="shift-line"
+          [options]="shiftLineOptions()"
+          optionLabel="name"
+          optionValue="id"
+          [ngModel]="shiftDialogLineId()"
+          (ngModelChange)="shiftDialogLineId.set($event)"
+          data-testid="shift-line-select"
+        />
+      </div>
 
-    <label for="shift-start">{{ 'masterData.startTime' | translate }}</label>
-    <input
-      type="time"
-      id="shift-start"
-      name="shift-start"
-      [ngModel]="shiftDialogStartTime()"
-      (ngModelChange)="shiftDialogStartTime.set($event)"
-      data-testid="shift-start-input"
-    />
+      <div class="master-data__field">
+        <label for="shift-start">{{ 'masterData.startTime' | translate }}</label>
+        <input
+          type="time"
+          id="shift-start"
+          name="shift-start"
+          [ngModel]="shiftDialogStartTime()"
+          (ngModelChange)="shiftDialogStartTime.set($event)"
+          data-testid="shift-start-input"
+        />
+      </div>
 
-    <label for="shift-end">{{ 'masterData.endTime' | translate }}</label>
-    <input
-      type="time"
-      id="shift-end"
-      name="shift-end"
-      [ngModel]="shiftDialogEndTime()"
-      (ngModelChange)="shiftDialogEndTime.set($event)"
-      data-testid="shift-end-input"
-    />
+      <div class="master-data__field">
+        <label for="shift-end">{{ 'masterData.endTime' | translate }}</label>
+        <input
+          type="time"
+          id="shift-end"
+          name="shift-end"
+          [ngModel]="shiftDialogEndTime()"
+          (ngModelChange)="shiftDialogEndTime.set($event)"
+          data-testid="shift-end-input"
+        />
+      </div>
+    </p-fluid>
 
     <ng-template pTemplate="footer">
       <p-button [label]="'masterData.cancel' | translate" [text]="true" (onClick)="closeShiftDialog()" data-testid="shift-dialog-cancel-btn" />
@@ -193,25 +323,161 @@
   </p-dialog>
 
   <p-dialog
+    [visible]="reasonDialog().visible"
+    (visibleChange)="!$event && closeReasonDialog()"
+    [modal]="true"
+    [style]="{ width: '28rem' }"
+    [header]="('masterData.add' | translate) + ' ' + ('masterData.reasonCodes' | translate)"
+    data-testid="reason-code-dialog"
+  >
+    <p-fluid>
+      <div class="master-data__field">
+        <label for="reason-code-name">{{ 'masterData.name' | translate }}</label>
+        <input
+          pInputText
+          id="reason-code-name"
+          name="reason-code-name"
+          [ngModel]="reasonDialogName()"
+          (ngModelChange)="reasonDialogName.set($event)"
+          data-testid="reason-code-name-input"
+        />
+      </div>
+
+      <div class="master-data__field">
+        <label for="reason-code-loss-category">{{ 'masterData.lossCategory.label' | translate }}</label>
+        <p-select
+          id="reason-code-loss-category"
+          [options]="lossCategoryOptions"
+          optionLabel="labelKey"
+          optionValue="value"
+          [ngModel]="reasonDialogLossCategory()"
+          (ngModelChange)="reasonDialogLossCategory.set($event)"
+          data-testid="reason-code-loss-category-select"
+        >
+          <ng-template let-option pTemplate="item">{{ option.labelKey | translate }}</ng-template>
+          <ng-template let-option pTemplate="selectedItem">{{ option.labelKey | translate }}</ng-template>
+        </p-select>
+      </div>
+    </p-fluid>
+
+    <ng-template pTemplate="footer">
+      <p-button [label]="'masterData.cancel' | translate" [text]="true" (onClick)="closeReasonDialog()" data-testid="reason-code-dialog-cancel-btn" />
+      <p-button [label]="'masterData.save' | translate" [loading]="reasonSaving()" (onClick)="saveReasonCode()" data-testid="reason-code-dialog-save-btn" />
+    </ng-template>
+  </p-dialog>
+
+  <p-dialog
     [visible]="dialog().visible"
     (visibleChange)="!$event && closeDialog()"
     [modal]="true"
+    [style]="{ width: '28rem' }"
     [header]="((dialog().mode === 'create' ? 'masterData.add' : 'masterData.edit') | translate) + ' ' + (dialogLevelLabelKey() | translate)"
     data-testid="master-data-dialog"
   >
-    <label for="master-data-name">{{ 'masterData.name' | translate }}</label>
-    <input
-      pInputText
-      id="master-data-name"
-      name="master-data-name"
-      [ngModel]="dialogName()"
-      (ngModelChange)="dialogName.set($event)"
-      data-testid="master-data-name-input"
-    />
+    <p-fluid>
+      <div class="master-data__field">
+        <label for="master-data-name">{{ 'masterData.name' | translate }}</label>
+        <input
+          pInputText
+          id="master-data-name"
+          name="master-data-name"
+          [ngModel]="dialogName()"
+          (ngModelChange)="dialogName.set($event)"
+          data-testid="master-data-name-input"
+        />
+      </div>
+    </p-fluid>
 
     <ng-template pTemplate="footer">
       <p-button [label]="'masterData.cancel' | translate" [text]="true" (onClick)="closeDialog()" data-testid="dialog-cancel-btn" />
       <p-button [label]="'masterData.save' | translate" [loading]="saving()" (onClick)="save()" data-testid="dialog-save-btn" />
+    </ng-template>
+  </p-dialog>
+
+  <p-dialog
+    [visible]="userDialogVisible()"
+    (visibleChange)="!$event && closeUserDialog()"
+    [modal]="true"
+    [header]="('masterData.add' | translate) + ' ' + ('masterData.users' | translate)"
+    [style]="{ width: '28rem' }"
+    data-testid="user-dialog"
+  >
+    <p-fluid>
+      <div class="master-data__field">
+        <label for="user-username">{{ 'login.username' | translate }}</label>
+        <input
+          pInputText
+          id="user-username"
+          name="user-username"
+          [ngModel]="userDialogUsername()"
+          (ngModelChange)="userDialogUsername.set($event)"
+          data-testid="user-username-input"
+        />
+      </div>
+
+      <div class="master-data__field">
+        <label for="user-password">{{ 'login.password' | translate }}</label>
+        <p-password
+          id="user-password"
+          name="user-password"
+          [ngModel]="userDialogPassword()"
+          (ngModelChange)="userDialogPassword.set($event)"
+          [feedback]="false"
+          [toggleMask]="true"
+          data-testid="user-password-input"
+        />
+      </div>
+
+      <div class="master-data__field">
+        <label for="user-role">{{ 'masterData.role.label' | translate }}</label>
+        <p-select
+          id="user-role"
+          [options]="userRoleOptions"
+          optionLabel="labelKey"
+          optionValue="value"
+          [ngModel]="userDialogRole()"
+          (ngModelChange)="onUserRoleChange($event)"
+          data-testid="user-role-select"
+        >
+          <ng-template let-option pTemplate="item">{{ option.labelKey | translate }}</ng-template>
+          <ng-template let-option pTemplate="selectedItem">{{ option.labelKey | translate }}</ng-template>
+        </p-select>
+      </div>
+
+      @if (showUserScopeFields()) {
+        <div class="master-data__field">
+          <label for="user-sites">{{ 'masterData.sites' | translate }}</label>
+          <p-multiselect
+            id="user-sites"
+            [options]="sites()"
+            optionLabel="name"
+            optionValue="id"
+            [ngModel]="userDialogSiteIds()"
+            (ngModelChange)="onUserSiteIdsChange($event)"
+            data-testid="user-sites-select"
+          />
+        </div>
+
+        @if (showUserLineField()) {
+          <div class="master-data__field">
+            <label for="user-lines">{{ 'masterData.lines' | translate }}</label>
+            <p-multiselect
+              id="user-lines"
+              [options]="userDialogLineOptions()"
+              optionLabel="name"
+              optionValue="id"
+              [ngModel]="userDialogLineIds()"
+              (ngModelChange)="userDialogLineIds.set($event)"
+              data-testid="user-lines-select"
+            />
+          </div>
+        }
+      }
+    </p-fluid>
+
+    <ng-template pTemplate="footer">
+      <p-button [label]="'masterData.cancel' | translate" [text]="true" (onClick)="closeUserDialog()" data-testid="user-dialog-cancel-btn" />
+      <p-button [label]="'masterData.save' | translate" [loading]="userSaving()" (onClick)="saveUser()" data-testid="user-dialog-save-btn" />
     </ng-template>
   </p-dialog>
 </div>

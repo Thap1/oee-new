@@ -8,6 +8,7 @@ import Aura from '@primeuix/themes/aura';
 import { routes } from './app.routes';
 import { authInterceptor } from './core/auth/auth.interceptor';
 import { HttpTranslateLoader } from './core/i18n/http-translate-loader';
+import { readStoredLang } from './core/i18n/lang-storage';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -15,7 +16,7 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes),
     provideHttpClient(withInterceptors([authInterceptor])),
     providePrimeNG({ theme: { preset: Aura } }),
-    provideTranslateService({ lang: 'vi', fallbackLang: 'vi' }),
+    provideTranslateService({ lang: readStoredLang(), fallbackLang: 'vi' }),
     provideTranslateLoader(HttpTranslateLoader),
   ],
 };

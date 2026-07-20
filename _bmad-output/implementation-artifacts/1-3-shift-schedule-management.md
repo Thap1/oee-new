@@ -4,7 +4,7 @@ baseline_commit: acc0da8b12530ade9a63e789fea63451e34c6714
 
 # Story 1.3: Quản lý ca làm việc (Shift Schedule)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -36,6 +36,10 @@ so that reports and dashboards group data by đúng ca.
 - [x] Task 5: Testing (tất cả AC)
   - [x] Unit test Domain: overlap-check với các case biên (liền kề nhưng không chồng, chồng một phần, bao trùm hoàn toàn, ca qua nửa đêm nếu áp dụng)
   - [x] Integration test API: tạo ca chồng lấn → lỗi `SHIFT_OVERLAP`; role≠Admin → 403
+
+### Review Findings
+
+- [x] [Review][Defer] Overlap check (`EnsureNoOverlapAsync`) is read-then-write with no DB-level constraint (no unique index/exclusion constraint in the `AddShiftSchedule` migration) — two concurrent `POST` requests for the same Site/Line could both pass validation and insert overlapping shifts, violating AC #2 under concurrency. Same class of gap already deferred for Story 1.2 (no uniqueness constraint at DB level); Admin-driven manual shift setup makes this low-probability in practice. [src/OeeNew.Application/MasterData/ShiftScheduleManagementUseCase.cs:61-69, src/OeeNew.Infrastructure/Persistence/OeeDbContext.cs:51-66] — deferred, pre-existing pattern
 
 ## Dev Notes
 

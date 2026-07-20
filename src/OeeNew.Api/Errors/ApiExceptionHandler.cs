@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using OeeNew.Application.Auth;
+using OeeNew.Application.Identity;
 using OeeNew.Application.MasterData;
 using OeeNew.Domain.MasterData;
 
@@ -47,6 +48,10 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
             new ApiErrorResponse { Code = "VALIDATION_ERROR", Message = validation.Message }),
         ShiftOverlapException overlap => (StatusCodes.Status409Conflict,
             new ApiErrorResponse { Code = "SHIFT_OVERLAP", Message = overlap.Message }),
+        UsernameAlreadyTakenException taken => (StatusCodes.Status409Conflict,
+            new ApiErrorResponse { Code = "USERNAME_TAKEN", Message = taken.Message }),
+        CredentialProvisioningException provisioning => (StatusCodes.Status503ServiceUnavailable,
+            new ApiErrorResponse { Code = "CREDENTIAL_PROVISIONING_FAILED", Message = provisioning.Message }),
         DbUpdateException => (StatusCodes.Status409Conflict,
             new ApiErrorResponse { Code = "CONFLICT", Message = "The operation could not be completed because a related record changed concurrently. Please retry." }),
         _ => (StatusCodes.Status500InternalServerError,

@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
@@ -24,6 +24,7 @@ export class Login {
   constructor(
     private readonly auth: AuthService,
     private readonly router: Router,
+    private readonly route: ActivatedRoute,
   ) {}
 
   async submit(): Promise<void> {
@@ -31,7 +32,8 @@ export class Login {
     this.isSubmitting.set(true);
     try {
       await this.auth.login(this.username(), this.password());
-      await this.router.navigateByUrl('/dashboard');
+      const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+      await this.router.navigateByUrl(returnUrl || '/dashboard');
     } catch (err) {
       // Only a 401 from the API means the credentials were wrong; anything else (network down,
       // 5xx, CORS) is a different failure and telling the user "wrong password" would be misleading.

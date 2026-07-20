@@ -35,6 +35,27 @@
     "startTime": "Start Time",
     "endTime": "End Time",
     "confirmDeleteShift": "Delete shift \"{{name}}\"? This cannot be undone.",
+    "reasonCodes": "Reason Codes",
+    "selectSiteForReasonCodesPrompt": "Select a Site to see its Reason Codes",
+    "active": "Active",
+    "inactive": "Inactive",
+    "deactivate": "Deactivate",
+    "status": "Status",
+    "actions": "Actions",
+    "lossCategory": {
+      "label": "Loss Category",
+      "AvailabilityLoss": "Availability Loss",
+      "PerformanceLoss": "Performance Loss",
+      "QualityLoss": "Quality Loss"
+    },
+    "users": "Users",
+    "role": {
+      "label": "Role",
+      "admin": "Admin",
+      "manager": "Manager",
+      "operator": "Operator",
+      "viewer": "Viewer"
+    },
     "error": {
       "notFound": "This record no longer exists. The list has been refreshed.",
       "parentNotFound": "The parent record no longer exists. Please refresh.",
@@ -42,6 +63,7 @@
       "shiftOverlap": "This shift overlaps an existing one: {{message}}",
       "validationError": "Invalid data: {{message}}",
       "forbidden": "You do not have permission to perform this action.",
+      "usernameTaken": "That username is already taken.",
       "generic": "Something went wrong. Please try again."
     }
   }

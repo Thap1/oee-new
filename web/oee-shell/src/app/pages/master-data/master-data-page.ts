@@ -4,12 +4,29 @@ import { FormsModule } from '@angular/forms';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { PrimeTemplate } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
+import { CardModule } from 'primeng/card';
 import { DialogModule } from 'primeng/dialog';
+import { FluidModule } from 'primeng/fluid';
 import { InputTextModule } from 'primeng/inputtext';
+import { MultiSelectModule } from 'primeng/multiselect';
+import { PasswordModule } from 'primeng/password';
 import { TableModule } from 'primeng/table';
 import { SelectModule } from 'primeng/select';
 import { AuthService } from '../../core/auth/auth.service';
-import { LineDto, MachineDto, MasterDataService, ShiftScheduleDto, SiteDto } from './master-data.service';
+import {
+  LineDto,
+  LossCategoryValue,
+  MachineDto,
+  MasterDataService,
+  ReasonCodeDto,
+  ShiftScheduleDto,
+  SiteDto,
+  UserDto,
+  UserRoleValue,
+} from './master-data.service';
+
+const USER_ROLES: UserRoleValue[] = ['Admin', 'Manager', 'Operator', 'Viewer'];
+const LOSS_CATEGORIES: LossCategoryValue[] = ['AvailabilityLoss', 'PerformanceLoss', 'QualityLoss'];
 
 type Level = 'site' | 'line' | 'machine';
 
@@ -30,6 +47,12 @@ interface ShiftDialogState {
 
 const CLOSED_SHIFT_DIALOG: ShiftDialogState = { visible: false, mode: 'create', id: null };
 
+interface ReasonDialogState {
+  visible: boolean;
+}
+
+const CLOSED_REASON_DIALOG: ReasonDialogState = { visible: false };
+
 interface ApiErrorBody {
   code?: string;
   message?: string;
@@ -49,7 +72,20 @@ function toInputTime(apiTime: string): string {
 @Component({
   selector: 'app-master-data-page',
   standalone: true,
-  imports: [FormsModule, TranslatePipe, PrimeTemplate, ButtonModule, DialogModule, InputTextModule, TableModule, SelectModule],
+  imports: [
+    FormsModule,
+    TranslatePipe,
+    PrimeTemplate,
+    ButtonModule,
+    CardModule,
+    DialogModule,
+    FluidModule,
+    InputTextModule,
+    PasswordModule,
+    MultiSelectModule,
+    TableModule,
+    SelectModule,
+  ],
   templateUrl: './master-data-page.html',
   styleUrl: './master-data-page.scss',
 })
@@ -58,6 +94,7 @@ export class MasterDataPage implements OnInit {
   readonly lines = signal<LineDto[]>([]);
   readonly machines = signal<MachineDto[]>([]);
   readonly shiftSchedules = signal<ShiftScheduleDto[]>([]);
+  readonly reasonCodes = signal<ReasonCodeDto[]>([]);
   readonly selectedSite = signal<SiteDto | null>(null);
   readonly selectedLine = signal<LineDto | null>(null);
   readonly error = signal<string | null>(null);
@@ -72,9 +109,31 @@ export class MasterDataPage implements OnInit {
   readonly shiftDialogEndTime = signal('');
   readonly shiftSaving = signal(false);
 
+  readonly reasonDialog = signal<ReasonDialogState>(CLOSED_REASON_DIALOG);
+  readonly reasonDialogName = signal('');
+  readonly reasonDialogLossCategory = signal<LossCategoryValue>('AvailabilityLoss');
+  readonly reasonSaving = signal(false);
+
+  readonly users = signal<UserDto[]>([]);
+  readonly userDialogVisible = signal(false);
+  readonly userDialogUsername = signal('');
+  readonly userDialogPassword = signal('');
+  readonly userDialogRole = signal<UserRoleValue>('Manager');
+  readonly userDialogSiteIds = signal<string[]>([]);
+  readonly userDialogLineIds = signal<string[]>([]);
+  readonly userDialogLineOptions = signal<LineDto[]>([]);
+  readonly userSaving = signal(false);
+
   readonly isAdmin = computed(() => this.auth.role() === 'Admin');
   readonly dialogLevelLabelKey = computed(() => `masterData.${this.dialog().level}s`);
   readonly shiftLineOptions = computed(() => [{ id: null, name: this.translate.instant('masterData.allLines') }, ...this.lines()]);
+  readonly userRoleOptions = USER_ROLES.map((role) => ({ value: role, labelKey: `masterData.role.${role.toLowerCase()}` }));
+  readonly lossCategoryOptions = LOSS_CATEGORIES.map((category) => ({
+    value: category,
+    labelKey: `masterData.lossCategory.${category}`,
+  }));
+  readonly showUserScopeFields = computed(() => this.userDialogRole() !== 'Admin');
+  readonly showUserLineField = computed(() => this.userDialogRole() === 'Operator');
 
   constructor(
     private readonly masterData: MasterDataService,
@@ -87,6 +146,17 @@ export class MasterDataPage implements OnInit {
 
   ngOnInit(): void {
     void this.loadSites();
+    if (this.isAdmin()) {
+      void this.loadUsers();
+    }
+  }
+
+  async loadUsers(): Promise<void> {
+    try {
+      this.users.set(await this.masterData.listUsers());
+    } catch (err) {
+      this.error.set(this.describeError(err));
+    }
   }
 
   async loadSites(): Promise<void> {
@@ -103,15 +173,18 @@ export class MasterDataPage implements OnInit {
     this.lines.set([]);
     this.machines.set([]);
     this.shiftSchedules.set([]);
+    this.reasonCodes.set([]);
     const token = ++this.siteSelectionToken;
     try {
-      const [lines, shiftSchedules] = await Promise.all([
+      const [lines, shiftSchedules, reasonCodes] = await Promise.all([
         this.masterData.listLines(site.id),
         this.masterData.listShiftSchedules(site.id),
+        this.masterData.listReasonCodes(site.id),
       ]);
       if (token === this.siteSelectionToken) {
         this.lines.set(lines);
         this.shiftSchedules.set(shiftSchedules);
+        this.reasonCodes.set(reasonCodes);
       }
     } catch (err) {
       if (token === this.siteSelectionToken) {
@@ -192,6 +265,7 @@ export class MasterDataPage implements OnInit {
         this.lines.set([]);
         this.machines.set([]);
         this.shiftSchedules.set([]);
+        this.reasonCodes.set([]);
       }
     } catch (err) {
       await this.handleError(err);
@@ -315,6 +389,104 @@ export class MasterDataPage implements OnInit {
     }
   }
 
+  openCreateReasonCode(): void {
+    this.error.set(null);
+    this.reasonDialogName.set('');
+    this.reasonDialogLossCategory.set('AvailabilityLoss');
+    this.reasonDialog.set({ visible: true });
+  }
+
+  closeReasonDialog(): void {
+    this.reasonDialog.set(CLOSED_REASON_DIALOG);
+  }
+
+  async saveReasonCode(): Promise<void> {
+    const name = this.reasonDialogName().trim();
+    const siteId = this.selectedSite()?.id;
+    if (!name || !siteId) {
+      return;
+    }
+
+    this.reasonSaving.set(true);
+    try {
+      const reasonCode = await this.masterData.createReasonCode(siteId, name, this.reasonDialogLossCategory());
+      this.reasonCodes.update((list) => [...list, reasonCode]);
+      this.closeReasonDialog();
+    } catch (err) {
+      await this.handleError(err);
+    } finally {
+      this.reasonSaving.set(false);
+    }
+  }
+
+  async deactivateReasonCode(reasonCode: ReasonCodeDto): Promise<void> {
+    this.error.set(null);
+    try {
+      const updated = await this.masterData.deactivateReasonCode(reasonCode.id);
+      this.reasonCodes.update((list) => list.map((r) => (r.id === updated.id ? updated : r)));
+    } catch (err) {
+      await this.handleError(err);
+    }
+  }
+
+  openCreateUser(): void {
+    this.error.set(null);
+    this.userDialogUsername.set('');
+    this.userDialogPassword.set('');
+    this.userDialogRole.set('Manager');
+    this.userDialogSiteIds.set([]);
+    this.userDialogLineIds.set([]);
+    this.userDialogLineOptions.set([]);
+    this.userDialogVisible.set(true);
+  }
+
+  closeUserDialog(): void {
+    this.userDialogVisible.set(false);
+  }
+
+  onUserRoleChange(role: UserRoleValue): void {
+    this.userDialogRole.set(role);
+    if (role === 'Admin') {
+      this.userDialogSiteIds.set([]);
+      this.userDialogLineIds.set([]);
+      this.userDialogLineOptions.set([]);
+    }
+  }
+
+  async onUserSiteIdsChange(siteIds: string[]): Promise<void> {
+    this.userDialogSiteIds.set(siteIds);
+    if (siteIds.length === 0) {
+      this.userDialogLineOptions.set([]);
+      this.userDialogLineIds.set([]);
+      return;
+    }
+    const lineLists = await Promise.all(siteIds.map((siteId) => this.masterData.listLines(siteId)));
+    const options = lineLists.flat();
+    this.userDialogLineOptions.set(options);
+    const validIds = new Set(options.map((l) => l.id));
+    this.userDialogLineIds.update((ids) => ids.filter((id) => validIds.has(id)));
+  }
+
+  async saveUser(): Promise<void> {
+    const username = this.userDialogUsername().trim();
+    const password = this.userDialogPassword();
+    const role = this.userDialogRole();
+    if (!username || !password) {
+      return;
+    }
+
+    this.userSaving.set(true);
+    try {
+      const user = await this.masterData.createUser(username, password, role, this.userDialogSiteIds(), this.userDialogLineIds());
+      this.users.update((list) => [...list, user]);
+      this.closeUserDialog();
+    } catch (err) {
+      await this.handleError(err);
+    } finally {
+      this.userSaving.set(false);
+    }
+  }
+
   lineNameFor(lineId: string | null): string {
     if (!lineId) {
       return this.translate.instant('masterData.allLines');
@@ -358,6 +530,7 @@ export class MasterDataPage implements OnInit {
       this.lines.set([]);
       this.machines.set([]);
       this.shiftSchedules.set([]);
+      this.reasonCodes.set([]);
       return;
     }
     await this.selectSite(site);
@@ -388,6 +561,9 @@ export class MasterDataPage implements OnInit {
       }
       if (body?.code === 'FORBIDDEN') {
         return this.translate.instant('masterData.error.forbidden');
+      }
+      if (body?.code === 'USERNAME_TAKEN') {
+        return this.translate.instant('masterData.error.usernameTaken');
       }
     }
     return this.translate.instant('masterData.error.generic');

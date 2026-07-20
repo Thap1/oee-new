@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, catchError, of } from 'rxjs';
 import { TranslateLoader, TranslationObject } from '@ngx-translate/core';
 
 /**
@@ -14,6 +14,8 @@ export class HttpTranslateLoader implements TranslateLoader {
   constructor(private readonly http: HttpClient) {}
 
   getTranslation(lang: string): Observable<TranslationObject> {
-    return this.http.get<TranslationObject>(`/i18n/${lang}.json`);
+    return this.http
+      .get<TranslationObject>(`/i18n/${lang}.json`)
+      .pipe(catchError(() => of({} as TranslationObject)));
   }
 }

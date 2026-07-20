@@ -35,7 +35,17 @@ export class AuthService {
   });
   readonly role = computed(() => this.claims()?.role ?? null);
 
-  constructor(private readonly http: HttpClient) {}
+  constructor(private readonly http: HttpClient) {
+    // Keep tabs in sync: a logout (or token change) in another tab must not leave this tab
+    // believing it's still authenticated until the next reload.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', (event: StorageEvent) => {
+        if (event.key === STORAGE_KEY) {
+          this.tokenSignal.set(event.newValue);
+        }
+      });
+    }
+  }
 
   get accessToken(): string | null {
     return this.tokenSignal();

@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-18
-last_updated: 2026-07-19
+last_updated: 2026-07-20
 project: oee-new
 project_key: NOKEY
 tracking_system: file-system
@@ -49,12 +49,12 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts"
 
 development_status:
   epic-1: in-progress
-  1-1-login-app-shell: review
+  1-1-login-app-shell: done
   1-2-site-line-machine-management: done
-  1-3-shift-schedule-management: review
-  1-4-user-role-scope-management: ready-for-dev
-  1-5-reason-code-management: ready-for-dev
-  1-6-site-line-selector-scope-enforcement: ready-for-dev
+  1-3-shift-schedule-management: done
+  1-4-user-role-scope-management: review
+  1-5-reason-code-management: review
+  1-6-site-line-selector-scope-enforcement: review
   epic-1-retrospective: optional
 
   epic-2: backlog

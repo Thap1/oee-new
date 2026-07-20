@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OeeNew.Api.Auth;
 using OeeNew.Application.Auth;
 using OeeNew.Application.MasterData;
 using OeeNew.Domain.MasterData;
@@ -20,7 +21,7 @@ public sealed class LinesController(LineManagementUseCase useCase) : ControllerB
     [HttpGet("api/master-data/sites/{siteId:guid}/lines")]
     public async Task<ActionResult<IReadOnlyList<LineResponse>>> ListBySite(Guid siteId, CancellationToken cancellationToken)
     {
-        var lines = await useCase.ListBySiteAsync(siteId, cancellationToken);
+        var lines = await useCase.ListBySiteAsync(User.GetCallerScope(), siteId, cancellationToken);
         return Ok(lines.Select(ToResponse).ToList());
     }
 

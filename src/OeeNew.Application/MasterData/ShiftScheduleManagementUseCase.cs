@@ -1,12 +1,20 @@
+using OeeNew.Application.Auth;
 using OeeNew.Domain.MasterData;
 
 namespace OeeNew.Application.MasterData;
 
-/// <summary>Create/reschedule/delete/list Shift Schedules under a Site (Story 1.3, AC #1, #2, #3 — FR-012). Admin-only, re-checked here in addition to the API-layer policy.</summary>
+/// <summary>Create/reschedule/delete/list Shift Schedules under a Site (Story 1.3, AC #1, #2, #3 — FR-012; scope-filtered per Story 1.6, AC #2/#4). Admin-only for writes, re-checked here in addition to the API-layer policy.</summary>
 public sealed class ShiftScheduleManagementUseCase(IShiftScheduleRepository shifts, ISiteRepository sites, ILineRepository lines)
 {
-    public Task<IReadOnlyList<ShiftSchedule>> ListBySiteAsync(Guid siteId, CancellationToken cancellationToken = default) =>
-        shifts.ListBySiteAsync(siteId, cancellationToken);
+    public async Task<IReadOnlyList<ShiftSchedule>> ListBySiteAsync(CallerScope scope, Guid siteId, CancellationToken cancellationToken = default)
+    {
+        if (!scope.AllowsSite(siteId))
+        {
+            throw new MasterDataForbiddenException();
+        }
+
+        return await shifts.ListBySiteAsync(siteId, cancellationToken);
+    }
 
     public async Task<ShiftSchedule> CreateAsync(
         string? callerRole, Guid siteId, Guid? lineId, string name, TimeOnly startTime, TimeOnly endTime, CancellationToken cancellationToken = default)

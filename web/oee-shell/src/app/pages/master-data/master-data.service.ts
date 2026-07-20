@@ -28,6 +28,26 @@ export interface ShiftScheduleDto {
   endTime: string;
 }
 
+export type LossCategoryValue = 'AvailabilityLoss' | 'PerformanceLoss' | 'QualityLoss';
+
+export interface ReasonCodeDto {
+  id: string;
+  siteId: string;
+  name: string;
+  lossCategory: LossCategoryValue;
+  isActive: boolean;
+}
+
+export type UserRoleValue = 'Admin' | 'Manager' | 'Operator' | 'Viewer';
+
+export interface UserDto {
+  id: string;
+  username: string;
+  role: UserRoleValue;
+  siteIds: string[];
+  lineIds: string[];
+}
+
 /** Site &gt; Line &gt; Machine CRUD (Story 1.2, FR-011). Reads: any role. Writes: Admin only (enforced server-side). */
 @Injectable({ providedIn: 'root' })
 export class MasterDataService {
@@ -97,5 +117,27 @@ export class MasterDataService {
 
   deleteShiftSchedule(id: string): Promise<void> {
     return firstValueFrom(this.http.delete<void>(`/api/master-data/shift-schedules/${id}`));
+  }
+
+  listReasonCodes(siteId: string): Promise<ReasonCodeDto[]> {
+    return firstValueFrom(this.http.get<ReasonCodeDto[]>(`/api/master-data/sites/${siteId}/reason-codes`));
+  }
+
+  createReasonCode(siteId: string, name: string, lossCategory: LossCategoryValue): Promise<ReasonCodeDto> {
+    return firstValueFrom(
+      this.http.post<ReasonCodeDto>(`/api/master-data/sites/${siteId}/reason-codes`, { name, lossCategory }),
+    );
+  }
+
+  deactivateReasonCode(id: string): Promise<ReasonCodeDto> {
+    return firstValueFrom(this.http.put<ReasonCodeDto>(`/api/master-data/reason-codes/${id}/deactivate`, null));
+  }
+
+  listUsers(): Promise<UserDto[]> {
+    return firstValueFrom(this.http.get<UserDto[]>('/api/users'));
+  }
+
+  createUser(username: string, password: string, role: UserRoleValue, siteIds: string[], lineIds: string[]): Promise<UserDto> {
+    return firstValueFrom(this.http.post<UserDto>('/api/users', { username, password, role, siteIds, lineIds }));
   }
 }

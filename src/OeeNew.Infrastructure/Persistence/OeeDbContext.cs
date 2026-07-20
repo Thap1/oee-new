@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OeeNew.Domain.Identity;
 using OeeNew.Domain.MasterData;
 
 namespace OeeNew.Infrastructure.Persistence;
@@ -13,6 +14,8 @@ public sealed class OeeDbContext(DbContextOptions<OeeDbContext> options) : DbCon
     public DbSet<Line> Lines => Set<Line>();
     public DbSet<Machine> Machines => Set<Machine>();
     public DbSet<ShiftSchedule> ShiftSchedules => Set<ShiftSchedule>();
+    public DbSet<ReasonCode> ReasonCodes => Set<ReasonCode>();
+    public DbSet<User> Users => Set<User>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -63,6 +66,37 @@ public sealed class OeeDbContext(DbContextOptions<OeeDbContext> options) : DbCon
             // since nothing references ShiftSchedule as a parent.
             shift.HasOne<Site>().WithMany().HasForeignKey(s => s.SiteId).OnDelete(DeleteBehavior.Restrict);
             shift.HasOne<Line>().WithMany().HasForeignKey(s => s.LineId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ReasonCode>(reasonCode =>
+        {
+            reasonCode.ToTable("ReasonCode");
+            reasonCode.HasKey(r => r.Id);
+            reasonCode.Property(r => r.Id).HasColumnType("uuid").HasDefaultValueSql("uuidv7()").ValueGeneratedOnAdd();
+            reasonCode.Property(r => r.SiteId).HasColumnType("uuid");
+            reasonCode.Property(r => r.Name).IsRequired().HasMaxLength(200);
+            // Mapped as a plain smallint NOT NULL (AD-5) — Postgres rejects any insert (including raw
+            // SQL bypassing the API) that omits it, not just an application-layer check.
+            reasonCode.Property(r => r.LossCategory).HasConversion<short>().IsRequired();
+            reasonCode.Property(r => r.IsActive).IsRequired().HasDefaultValue(true);
+            reasonCode.HasOne<Site>().WithMany().HasForeignKey(r => r.SiteId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<User>(user =>
+        {
+            user.ToTable("User");
+            user.HasKey(u => u.Id);
+            user.Property(u => u.Id).HasColumnType("uuid").HasDefaultValueSql("uuidv7()").ValueGeneratedOnAdd();
+            user.Property(u => u.Username).IsRequired().HasMaxLength(100);
+            user.HasIndex(u => u.Username).IsUnique();
+            user.Property(u => u.PasswordHash).IsRequired();
+            user.Property(u => u.Role).HasConversion<string>().HasMaxLength(20).IsRequired();
+            // Site/Line scope as native Postgres arrays (Npgsql maps Guid[] <-> uuid[] natively) —
+            // element-level FK enforcement isn't supported by Postgres for arrays; the Application
+            // layer validates each id exists before writing (UserManagementUseCase.EnsureScopeExistsAsync),
+            // consistent with how Story 1.2/1.3's other existence checks are app-level, not DB-level.
+            user.Property(u => u.SiteIds).HasColumnType("uuid[]");
+            user.Property(u => u.LineIds).HasColumnType("uuid[]");
         });
     }
 }

@@ -10,14 +10,9 @@
     gap: 1.5rem;
   }
 
-  &__panel {
-    background: var(--p-surface-0, #fff);
-    border: 1px solid var(--p-surface-200, #e5e7eb);
-    border-radius: 0.5rem;
-    padding: 1rem;
-  }
-
-  &__panel--shifts {
+  &__panel--shifts,
+  &__panel--reason-codes,
+  &__panel--users {
     margin-top: 1.5rem;
   }
 
@@ -30,6 +25,17 @@
 
   &__hint {
     opacity: 0.6;
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 1rem;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
   }
 
   &__row--selected {

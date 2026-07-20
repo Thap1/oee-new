@@ -35,6 +35,27 @@
     "startTime": "Giờ bắt đầu",
     "endTime": "Giờ kết thúc",
     "confirmDeleteShift": "Xoá ca \"{{name}}\"? Hành động này không thể hoàn tác.",
+    "reasonCodes": "Mã lý do",
+    "selectSiteForReasonCodesPrompt": "Chọn một Site để xem các Mã lý do",
+    "active": "Đang dùng",
+    "inactive": "Ngưng dùng",
+    "deactivate": "Ngưng dùng",
+    "status": "Trạng thái",
+    "actions": "Thao tác",
+    "lossCategory": {
+      "label": "Nhóm tổn thất",
+      "AvailabilityLoss": "Tổn thất khả dụng",
+      "PerformanceLoss": "Tổn thất hiệu suất",
+      "QualityLoss": "Tổn thất chất lượng"
+    },
+    "users": "Người dùng",
+    "role": {
+      "label": "Vai trò",
+      "admin": "Admin",
+      "manager": "Manager",
+      "operator": "Operator",
+      "viewer": "Viewer"
+    },
     "error": {
       "notFound": "Bản ghi này không còn tồn tại. Danh sách đã được làm mới.",
       "parentNotFound": "Bản ghi cha không còn tồn tại. Vui lòng làm mới.",
@@ -42,6 +63,7 @@
       "shiftOverlap": "Ca này chồng lấn với ca đã có: {{message}}",
       "validationError": "Dữ liệu không hợp lệ: {{message}}",
       "forbidden": "Bạn không có quyền thực hiện thao tác này.",
+      "usernameTaken": "Tên đăng nhập đã được sử dụng.",
       "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
     }
   }
