@@ -117,6 +117,67 @@ public class ReasonCodesEndpointsTests(MasterDataApiFactory factory) : IClassFix
     }
 
     [Fact]
+    public async Task Delete_WithNoDowntimeEventsReferencingIt_ReturnsNoContent()
+    {
+        var client = AdminClient();
+        var siteId = await CreateSiteAsync(client);
+        var created = (await (await client.PostAsJsonAsync($"/api/master-data/sites/{siteId}/reason-codes",
+            new CreateReasonCodeRequest($"Reason {Guid.NewGuid():N}", LossCategory.AvailabilityLoss)))
+            .Content.ReadFromJsonAsync<ReasonCodeResponse>(JsonOptions))!;
+
+        var response = await client.DeleteAsync($"/api/master-data/reason-codes/{created.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Delete_AsNonAdmin_ReturnsForbidden()
+    {
+        var client = AdminClient();
+        var siteId = await CreateSiteAsync(client);
+        var created = (await (await client.PostAsJsonAsync($"/api/master-data/sites/{siteId}/reason-codes",
+            new CreateReasonCodeRequest($"Reason {Guid.NewGuid():N}", LossCategory.AvailabilityLoss)))
+            .Content.ReadFromJsonAsync<ReasonCodeResponse>(JsonOptions))!;
+
+        var nonAdminClient = factory.CreateClient();
+        nonAdminClient.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateTokenFor("Operator"));
+        var response = await nonAdminClient.DeleteAsync($"/api/master-data/reason-codes/{created.Id}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Delete_WithDowntimeEventReferencingIt_ReturnsConflict()
+    {
+        // Story 2.5 AC #5: create a real DowntimeEvent via the actual ingestion + attach-reason flow
+        // (not a direct DB insert) so this proves the end-to-end guard, not just the use case in isolation.
+        var client = AdminClient();
+        var siteId = await CreateSiteAsync(client);
+        var line = (await (await client.PostAsJsonAsync($"/api/master-data/sites/{siteId}/lines", new CreateLineRequest($"Line {Guid.NewGuid():N}")))
+            .Content.ReadFromJsonAsync<LineResponse>())!;
+        var machine = (await (await client.PostAsJsonAsync($"/api/master-data/lines/{line.Id}/machines", new CreateMachineRequest($"Machine {Guid.NewGuid():N}")))
+            .Content.ReadFromJsonAsync<MachineResponse>())!;
+        var reasonCode = (await (await client.PostAsJsonAsync($"/api/master-data/sites/{siteId}/reason-codes",
+            new CreateReasonCodeRequest($"Reason {Guid.NewGuid():N}", LossCategory.AvailabilityLoss)))
+            .Content.ReadFromJsonAsync<ReasonCodeResponse>(JsonOptions))!;
+
+        await client.PostAsJsonAsync("/api/production/readings", new
+        {
+            machineId = machine.Id,
+            timestamp = DateTimeOffset.UtcNow,
+            counter = 1,
+            status = "Stopped",
+        });
+        await client.PostAsJsonAsync($"/api/production/machines/{machine.Id}/downtime-reason", new { reasonCodeId = reasonCode.Id });
+
+        var response = await client.DeleteAsync($"/api/master-data/reason-codes/{reasonCode.Id}");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ApiErrorResponse>();
+        Assert.Equal("HAS_DEPENDENTS", error!.Code);
+    }
+
+    [Fact]
     public async Task RawSqlInsert_WithoutLossCategory_IsRejectedByDbConstraint()
     {
         // AC #1: "kể cả gọi API trực tiếp" — NOT NULL must be enforced at the DB schema level, not

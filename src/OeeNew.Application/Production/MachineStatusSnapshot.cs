@@ -11,6 +11,7 @@ public sealed record MachineStatusSnapshot(
     Guid MachineId,
     string MachineName,
     Guid LineId,
+    Guid SiteId,
     MachineStatus? Status,
     long? Counter,
     DateTimeOffset? LastReportedAt);

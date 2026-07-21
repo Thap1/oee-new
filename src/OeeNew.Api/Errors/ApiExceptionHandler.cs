@@ -4,6 +4,7 @@ using OeeNew.Application.Auth;
 using OeeNew.Application.Identity;
 using OeeNew.Application.MasterData;
 using OeeNew.Domain.MasterData;
+using OeeNew.Domain.Production;
 
 namespace OeeNew.Api.Errors;
 
@@ -46,6 +47,8 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
             }),
         MasterDataValidationException validation => (StatusCodes.Status400BadRequest,
             new ApiErrorResponse { Code = "VALIDATION_ERROR", Message = validation.Message }),
+        DowntimeEventNotOpenException notOpen => (StatusCodes.Status404NotFound,
+            new ApiErrorResponse { Code = "DOWNTIME_EVENT_NOT_OPEN", Message = notOpen.Message }),
         ShiftOverlapException overlap => (StatusCodes.Status409Conflict,
             new ApiErrorResponse { Code = "SHIFT_OVERLAP", Message = overlap.Message }),
         UsernameAlreadyTakenException taken => (StatusCodes.Status409Conflict,

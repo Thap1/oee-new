@@ -215,6 +215,9 @@
                   data-testid="deactivate-reason-code-btn"
                 />
               }
+              @if (isAdmin()) {
+                <p-button icon="pi pi-trash" [text]="true" severity="danger" (click)="deleteReasonCode(reasonCode)" data-testid="delete-reason-code-btn" />
+              }
             </td>
           </tr>
         </ng-template>

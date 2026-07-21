@@ -1,8 +1,10 @@
 import { Component, OnDestroy, OnInit, effect, signal } from '@angular/core';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MachineStatusChangedEvent, MachineStatusHubService } from '../../core/realtime/machine-status-hub.service';
+import { MasterDataService, ReasonCodeDto } from '../master-data/master-data.service';
 import { DashboardService, MachineStatusDto } from './dashboard.service';
 import { MachineStatusCard } from './machine-status-card';
+import { ReasonCodePicker } from './reason-code-picker';
 
 const PULSE_DURATION_MS = 700;
 
@@ -11,18 +13,51 @@ const PULSE_DURATION_MS = 700;
  * then keeps them live via SignalR — an incoming event for a `machineId` not currently in the list
  * is ignored (defense-in-depth client-side scope filter; see Story 2.2 Dev Notes on AD-8's
  * single site-wide hub not doing per-connection scoping itself).
+ *
+ * Story 2.5: tapping a `Stopped` card opens the Reason Code Picker with that machine's Site's
+ * active-only Reason Codes; selecting one records it and closes the picker. A 404 (the machine
+ * resumed before the tap landed — Application layer's `DowntimeEventNotOpenException`) is a
+ * legitimate race, not a crash — the picker still just closes.
  */
 @Component({
   selector: 'app-dashboard-page',
   standalone: true,
-  imports: [TranslatePipe, MachineStatusCard],
+  imports: [TranslatePipe, MachineStatusCard, ReasonCodePicker],
   template: `
     <h2>{{ 'nav.dashboard' | translate }}</h2>
-    <div class="dashboard-grid">
-      @for (machine of machines(); track machine.machineId) {
-        <app-machine-status-card [snapshot]="machine" [justUpdated]="recentlyUpdated().has(machine.machineId)" />
-      }
-    </div>
+    @if (loadError()) {
+      <div class="dashboard-empty-state" data-testid="dashboard-load-error">
+        <i class="pi pi-exclamation-triangle" aria-hidden="true"></i>
+        <div class="dashboard-empty-state__title">{{ 'dashboard.loadError.title' | translate }}</div>
+        <div class="dashboard-empty-state__message">{{ 'dashboard.loadError.message' | translate }}</div>
+        <button type="button" data-testid="dashboard-load-error-retry" (click)="retryLoad()">
+          {{ 'dashboard.loadError.retry' | translate }}
+        </button>
+      </div>
+    } @else if (loaded() && machines().length === 0) {
+      <div class="dashboard-empty-state" data-testid="dashboard-empty-state">
+        <i class="pi pi-info-circle" aria-hidden="true"></i>
+        <div class="dashboard-empty-state__title">{{ 'dashboard.emptyState.title' | translate }}</div>
+        <div class="dashboard-empty-state__message">{{ 'dashboard.emptyState.message' | translate }}</div>
+      </div>
+    } @else {
+      <div class="dashboard-grid">
+        @for (machine of machines(); track machine.machineId) {
+          <app-machine-status-card
+            [snapshot]="machine"
+            [justUpdated]="recentlyUpdated().has(machine.machineId)"
+            [noSignalThresholdSeconds]="noSignalThresholdSeconds()"
+            (cardTapped)="onCardTapped($event)"
+          />
+        }
+      </div>
+    }
+    <app-reason-code-picker
+      [open]="pickerOpen()"
+      [reasonCodes]="pickerReasonCodes()"
+      (reasonSelected)="onReasonSelected($event)"
+      (closed)="closePicker()"
+    />
   `,
   styles: [
     `
@@ -31,18 +66,50 @@ const PULSE_DURATION_MS = 700;
         grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
         gap: 1rem;
       }
+
+      .dashboard-empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+
+        i {
+          font-size: 2.5rem;
+        }
+      }
+
+      .dashboard-empty-state__title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-top: 0.75rem;
+      }
+
+      .dashboard-empty-state__message {
+        margin-top: 0.25rem;
+      }
     `,
   ],
 })
 export class DashboardPage implements OnInit, OnDestroy {
   private readonly machinesSignal = signal<MachineStatusDto[]>([]);
   private readonly recentlyUpdatedSignal = signal<ReadonlySet<string>>(new Set());
+  private readonly noSignalThresholdSecondsSignal = signal(60);
+  private readonly loadedSignal = signal(false);
+  private readonly loadErrorSignal = signal(false);
+  private readonly pickerOpenSignal = signal(false);
+  private readonly pickerReasonCodesSignal = signal<ReasonCodeDto[]>([]);
+  private pickerMachineId: string | null = null;
 
   readonly machines = this.machinesSignal.asReadonly();
   readonly recentlyUpdated = this.recentlyUpdatedSignal.asReadonly();
+  readonly noSignalThresholdSeconds = this.noSignalThresholdSecondsSignal.asReadonly();
+  /** True once the initial `listMachineStates()` load resolves — distinguishes "still loading" from "loaded and genuinely empty" (Story 2.4 AC #2), unrelated to a single card's own skeleton state (Story 2.2). */
+  readonly loaded = this.loadedSignal.asReadonly();
+  readonly loadError = this.loadErrorSignal.asReadonly();
+  readonly pickerOpen = this.pickerOpenSignal.asReadonly();
+  readonly pickerReasonCodes = this.pickerReasonCodesSignal.asReadonly();
 
   constructor(
     private readonly dashboardService: DashboardService,
+    private readonly masterDataService: MasterDataService,
     private readonly hub: MachineStatusHubService,
   ) {
     effect(() => {
@@ -54,12 +121,61 @@ export class DashboardPage implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
-    this.machinesSignal.set(await this.dashboardService.listMachineStates());
-    this.hub.connect();
+    await this.loadMachineStates();
+  }
+
+  async retryLoad(): Promise<void> {
+    await this.loadMachineStates();
+  }
+
+  private async loadMachineStates(): Promise<void> {
+    this.loadErrorSignal.set(false);
+    try {
+      const result = await this.dashboardService.listMachineStates();
+      this.machinesSignal.set(result.machines);
+      this.noSignalThresholdSecondsSignal.set(result.noSignalThresholdSeconds);
+      this.loadedSignal.set(true);
+      this.hub.connect();
+    } catch {
+      this.loadErrorSignal.set(true);
+    }
   }
 
   ngOnDestroy(): void {
     this.hub.disconnect();
+  }
+
+  async onCardTapped(machineId: string): Promise<void> {
+    const machine = this.machinesSignal().find((m) => m.machineId === machineId);
+    if (!machine) {
+      return;
+    }
+
+    const reasonCodes = await this.masterDataService.listReasonCodes(machine.siteId);
+    this.pickerMachineId = machineId;
+    this.pickerReasonCodesSignal.set(reasonCodes.filter((r) => r.isActive));
+    this.pickerOpenSignal.set(true);
+  }
+
+  async onReasonSelected(reasonCodeId: string): Promise<void> {
+    const machineId = this.pickerMachineId;
+    this.closePicker();
+    if (!machineId) {
+      return;
+    }
+
+    try {
+      await this.dashboardService.recordDowntimeReason(machineId, reasonCodeId);
+    } catch {
+      // A 404 here means the machine already resumed before the tap landed — a legitimate race
+      // (Application layer's DowntimeEventNotOpenException), not something to crash over.
+    }
+  }
+
+  closePicker(): void {
+    this.pickerOpenSignal.set(false);
+    this.pickerReasonCodesSignal.set([]);
+    this.pickerMachineId = null;
   }
 
   private applyEvent(event: MachineStatusChangedEvent): void {

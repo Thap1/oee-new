@@ -59,11 +59,11 @@ development_status:
 
   epic-2: in-progress
   2-1-production-data-ingestion: review
-  2-2-realtime-machine-status-dashboard: in-progress
-  2-3-no-signal-detection: ready-for-dev
-  2-4-scoped-multi-machine-dashboard: ready-for-dev
-  2-5-downtime-reason-picker: ready-for-dev
-  2-6-quality-reject-recording: ready-for-dev
+  2-2-realtime-machine-status-dashboard: review
+  2-3-no-signal-detection: review
+  2-4-scoped-multi-machine-dashboard: review
+  2-5-downtime-reason-picker: review
+  2-6-quality-reject-recording: review
   epic-2-retrospective: optional
 
   epic-3: backlog

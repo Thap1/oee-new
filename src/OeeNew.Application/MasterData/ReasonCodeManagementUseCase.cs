@@ -1,10 +1,11 @@
 using OeeNew.Application.Auth;
+using OeeNew.Application.Production;
 using OeeNew.Domain.MasterData;
 
 namespace OeeNew.Application.MasterData;
 
-/// <summary>Create/deactivate/list downtime Reason Codes under a Site (Story 1.5, AC #1-#3 — FR-014; scope-filtered per Story 1.6, AC #2/#4). Admin-only for writes, re-checked here in addition to the API-layer policy.</summary>
-public sealed class ReasonCodeManagementUseCase(IReasonCodeRepository reasonCodes, ISiteRepository sites)
+/// <summary>Create/deactivate/delete/list downtime Reason Codes under a Site (Story 1.5, AC #1-#3 — FR-014; scope-filtered per Story 1.6, AC #2/#4; hard-delete guard added by Story 2.5, AC #5). Admin-only for writes, re-checked here in addition to the API-layer policy.</summary>
+public sealed class ReasonCodeManagementUseCase(IReasonCodeRepository reasonCodes, ISiteRepository sites, IDowntimeEventRepository downtimeEvents)
 {
     public async Task<IReadOnlyList<ReasonCode>> ListBySiteAsync(CallerScope scope, Guid siteId, CancellationToken cancellationToken = default)
     {
@@ -44,5 +45,19 @@ public sealed class ReasonCodeManagementUseCase(IReasonCodeRepository reasonCode
         reasonCode.Deactivate();
         await reasonCodes.UpdateAsync(reasonCode, cancellationToken);
         return reasonCode;
+    }
+
+    /// <summary>Hard-delete (Story 2.5, AC #5) — blocked once any DowntimeEvent references it, to preserve historical reporting; Admin's only other option is <see cref="DeactivateAsync"/>.</summary>
+    public async Task DeleteAsync(string? callerRole, Guid id, CancellationToken cancellationToken = default)
+    {
+        MasterDataAuthorization.EnsureAdmin(callerRole);
+        var reasonCode = await reasonCodes.GetAsync(id, cancellationToken) ?? throw new MasterDataNotFoundException("ReasonCode", id);
+
+        if (await downtimeEvents.ExistsForReasonCodeAsync(id, cancellationToken))
+        {
+            throw new MasterDataHasDependentsException("ReasonCode", id, ["existing downtime records"]);
+        }
+
+        await reasonCodes.DeleteAsync(reasonCode, cancellationToken);
     }
 }

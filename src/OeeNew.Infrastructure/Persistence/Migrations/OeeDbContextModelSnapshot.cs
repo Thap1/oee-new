@@ -183,6 +183,34 @@ namespace OeeNew.Infrastructure.Persistence.Migrations
                     b.ToTable("Site", (string)null);
                 });
 
+            modelBuilder.Entity("OeeNew.Domain.Production.DowntimeEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuidv7()");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MachineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ReasonCodeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MachineId");
+
+                    b.HasIndex("ReasonCodeId");
+
+                    b.ToTable("DowntimeEvent", (string)null);
+                });
+
             modelBuilder.Entity("OeeNew.Domain.Production.MachineState", b =>
                 {
                     b.Property<Guid>("MachineId")
@@ -200,6 +228,29 @@ namespace OeeNew.Infrastructure.Persistence.Migrations
                     b.HasKey("MachineId");
 
                     b.ToTable("MachineState", (string)null);
+                });
+
+            modelBuilder.Entity("OeeNew.Domain.Production.QualityReject", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuidv7()");
+
+                    b.Property<Guid>("MachineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MachineId");
+
+                    b.ToTable("QualityReject", (string)null);
                 });
 
             modelBuilder.Entity("OeeNew.Domain.MasterData.Line", b =>
@@ -243,11 +294,34 @@ namespace OeeNew.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("OeeNew.Domain.Production.DowntimeEvent", b =>
+                {
+                    b.HasOne("OeeNew.Domain.MasterData.Machine", null)
+                        .WithMany()
+                        .HasForeignKey("MachineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OeeNew.Domain.MasterData.ReasonCode", null)
+                        .WithMany()
+                        .HasForeignKey("ReasonCodeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("OeeNew.Domain.Production.MachineState", b =>
                 {
                     b.HasOne("OeeNew.Domain.MasterData.Machine", null)
                         .WithOne()
                         .HasForeignKey("OeeNew.Domain.Production.MachineState", "MachineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OeeNew.Domain.Production.QualityReject", b =>
+                {
+                    b.HasOne("OeeNew.Domain.MasterData.Machine", null)
+                        .WithMany()
+                        .HasForeignKey("MachineId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

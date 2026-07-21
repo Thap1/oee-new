@@ -16,6 +16,7 @@ using OeeNew.Application.MasterData;
 using OeeNew.Application.Production;
 using OeeNew.Infrastructure.Identity;
 using OeeNew.Infrastructure.Persistence;
+using OeeNew.Infrastructure.Production;
 using OeeNew.Infrastructure.RealTime;
 
 // Constrained containers (e.g. Render's free tier) hit the OS inotify-instance limit from
@@ -39,6 +40,7 @@ builder.Services.AddSingleton(new AppModeInfo(appMode));
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<BootstrapAdminOptions>(builder.Configuration.GetSection(BootstrapAdminOptions.SectionName));
+builder.Services.Configure<ProductionOptions>(builder.Configuration.GetSection(ProductionOptions.SectionName));
 
 // Central Identity Provider (AD-7): signing keys + token issuance + credential validation.
 builder.Services.AddSingleton<IJwtSigningKeyProvider, RsaJwtSigningKeyProvider>();
@@ -71,8 +73,12 @@ builder.Services.AddScoped<UserManagementUseCase>();
 
 // Production ingestion (Story 2.1 — FR-001/002/003, AD-3): same local Postgres, no Central dependency.
 builder.Services.AddScoped<IMachineStateRepository, MachineStateRepository>();
+builder.Services.AddScoped<IDowntimeEventRepository, DowntimeEventRepository>();
+builder.Services.AddScoped<IQualityRejectRepository, QualityRejectRepository>();
 builder.Services.AddScoped<IngestProductionReadingUseCase>();
 builder.Services.AddScoped<MachineStatusQueryUseCase>();
+builder.Services.AddScoped<RecordDowntimeReasonUseCase>();
+builder.Services.AddScoped<RecordQualityRejectUseCase>();
 
 // Real-time dashboard (Story 2.2 — FR-004, NFR-1, AD-8): one hub for this site instance.
 builder.Services.AddSignalR();

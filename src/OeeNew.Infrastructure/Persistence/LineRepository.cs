@@ -19,6 +19,9 @@ public sealed class LineRepository(OeeDbContext context) : ILineRepository
     public async Task<IReadOnlyList<Line>> ListBySiteAsync(Guid siteId, CancellationToken cancellationToken = default) =>
         await context.Lines.Where(l => l.SiteId == siteId).OrderBy(l => l.Name).ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Line>> ListByIdsAsync(IReadOnlyList<Guid> lineIds, CancellationToken cancellationToken = default) =>
+        await context.Lines.Where(l => lineIds.Contains(l.Id)).ToListAsync(cancellationToken);
+
     public Task UpdateAsync(Line line, CancellationToken cancellationToken = default) =>
         context.SaveChangesAsync(cancellationToken);
 

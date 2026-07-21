@@ -1,5 +1,6 @@
 using OeeNew.Application.Auth;
 using OeeNew.Application.MasterData;
+using OeeNew.Application.Tests.Production;
 using OeeNew.Domain.MasterData;
 using Xunit;
 
@@ -122,7 +123,7 @@ public class ScopeEnforcementTests
     {
         var siteRepo = new FakeSiteRepository();
         var siteId = siteRepo.Seed("Site A");
-        var useCase = new ReasonCodeManagementUseCase(new FakeReasonCodeRepository(), siteRepo);
+        var useCase = new ReasonCodeManagementUseCase(new FakeReasonCodeRepository(), siteRepo, new FakeDowntimeEventRepository());
         var scope = new CallerScope(false, [Guid.NewGuid()], []);
 
         await Assert.ThrowsAsync<MasterDataForbiddenException>(() => useCase.ListBySiteAsync(scope, siteId));
@@ -135,7 +136,7 @@ public class ScopeEnforcementTests
         var reasonCodeRepo = new FakeReasonCodeRepository();
         var siteId = siteRepo.Seed("Site A");
         reasonCodeRepo.Seed(siteId, "Changeover", LossCategory.PerformanceLoss);
-        var useCase = new ReasonCodeManagementUseCase(reasonCodeRepo, siteRepo);
+        var useCase = new ReasonCodeManagementUseCase(reasonCodeRepo, siteRepo, new FakeDowntimeEventRepository());
         var scope = new CallerScope(false, [siteId], []);
 
         var result = await useCase.ListBySiteAsync(scope, siteId);

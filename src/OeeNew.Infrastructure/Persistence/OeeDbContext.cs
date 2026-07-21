@@ -18,6 +18,8 @@ public sealed class OeeDbContext(DbContextOptions<OeeDbContext> options) : DbCon
     public DbSet<ReasonCode> ReasonCodes => Set<ReasonCode>();
     public DbSet<User> Users => Set<User>();
     public DbSet<MachineState> MachineStates => Set<MachineState>();
+    public DbSet<DowntimeEvent> DowntimeEvents => Set<DowntimeEvent>();
+    public DbSet<QualityReject> QualityRejects => Set<QualityReject>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -111,6 +113,33 @@ public sealed class OeeDbContext(DbContextOptions<OeeDbContext> options) : DbCon
             state.Property(s => s.Counter).HasColumnType("bigint");
             state.Property(s => s.LastReportedAt).IsRequired();
             state.HasOne<Machine>().WithOne().HasForeignKey<MachineState>(s => s.MachineId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<DowntimeEvent>(downtimeEvent =>
+        {
+            downtimeEvent.ToTable("DowntimeEvent");
+            downtimeEvent.HasKey(e => e.Id);
+            // AD-6: synced entity (AD-2 — "DowntimeEvent khi đã đóng"), so uuidv7() like every other
+            // synced entity, not a plain int.
+            downtimeEvent.Property(e => e.Id).HasColumnType("uuid").HasDefaultValueSql("uuidv7()").ValueGeneratedOnAdd();
+            downtimeEvent.Property(e => e.MachineId).HasColumnType("uuid");
+            downtimeEvent.Property(e => e.ReasonCodeId).HasColumnType("uuid");
+            downtimeEvent.Property(e => e.StartedAt).IsRequired();
+            downtimeEvent.HasOne<Machine>().WithMany().HasForeignKey(e => e.MachineId).OnDelete(DeleteBehavior.Restrict);
+            // Nullable FK: an event can close before an Operator ever attaches a reason (Story 2.5 Dev Notes).
+            downtimeEvent.HasOne<ReasonCode>().WithMany().HasForeignKey(e => e.ReasonCodeId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<QualityReject>(qualityReject =>
+        {
+            qualityReject.ToTable("QualityReject");
+            qualityReject.HasKey(q => q.Id);
+            // AD-6: synced entity (AD-2 — "QualityReject theo bản ghi").
+            qualityReject.Property(q => q.Id).HasColumnType("uuid").HasDefaultValueSql("uuidv7()").ValueGeneratedOnAdd();
+            qualityReject.Property(q => q.MachineId).HasColumnType("uuid");
+            qualityReject.Property(q => q.Quantity).HasColumnType("integer");
+            qualityReject.Property(q => q.RecordedAt).IsRequired();
+            qualityReject.HasOne<Machine>().WithMany().HasForeignKey(q => q.MachineId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

@@ -58,6 +58,9 @@ internal sealed class FakeLineRepository : ILineRepository
     public Task<IReadOnlyList<Line>> ListBySiteAsync(Guid siteId, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<Line>>(_lines.Values.Where(l => l.SiteId == siteId).ToList());
 
+    public Task<IReadOnlyList<Line>> ListByIdsAsync(IReadOnlyList<Guid> lineIds, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Line>>(_lines.Values.Where(l => lineIds.Contains(l.Id)).ToList());
+
     public Task UpdateAsync(Line line, CancellationToken cancellationToken = default)
     {
         _lines[line.Id] = line;
@@ -190,6 +193,12 @@ internal sealed class FakeReasonCodeRepository : IReasonCodeRepository
     public Task UpdateAsync(ReasonCode reasonCode, CancellationToken cancellationToken = default)
     {
         _reasonCodes[reasonCode.Id] = reasonCode;
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteAsync(ReasonCode reasonCode, CancellationToken cancellationToken = default)
+    {
+        _reasonCodes.Remove(reasonCode.Id);
         return Task.CompletedTask;
     }
 

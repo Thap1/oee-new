@@ -9,4 +9,7 @@ public interface IReasonCodeRepository
     Task<ReasonCode?> GetAsync(Guid id, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ReasonCode>> ListBySiteAsync(Guid siteId, CancellationToken cancellationToken = default);
     Task UpdateAsync(ReasonCode reasonCode, CancellationToken cancellationToken = default);
+
+    /// <summary>Hard-delete (Story 2.5, AC #5) — only reachable once <c>IDowntimeEventRepository.ExistsForReasonCodeAsync</c> confirms nothing references it.</summary>
+    Task DeleteAsync(ReasonCode reasonCode, CancellationToken cancellationToken = default);
 }

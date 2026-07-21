@@ -4,7 +4,7 @@ baseline_commit: 153bffe33e1cfaa4730411a270388f54b0c1bd21
 
 # Story 2.3: Phát hiện & hiển thị mất tín hiệu máy
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -22,21 +22,21 @@ so that I don't mistake a connectivity problem for a real stoppage.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Backend — single source of truth for the threshold (AC: #1)
-  - [ ] `appsettings.json` (`src/OeeNew.Api/`): add `"Production": { "NoSignalThresholdSeconds": 60 }` — `[ASSUMPTION]` 60s is a placeholder default (no real machine cadence is known yet, same caveat the PRD itself flags for other MVP guesses); it must be a config value, not a hardcoded magic number, precisely so it can be tuned later without a code change
-  - [ ] `src/OeeNew.Infrastructure/Production/ProductionOptions.cs` (or similar `Options` class bound to the `Production` section) exposing `NoSignalThresholdSeconds`
-  - [ ] Extend the `GET /api/production/machine-states` response from Story 2.2 (`src/OeeNew.Api/Controllers/ProductionStatusController.cs`) to a small wrapper: `{ noSignalThresholdSeconds: number, machines: MachineStatusResponse[] }` instead of a bare array — one round trip gives the dashboard everything it needs to compute staleness itself. This is a deliberate change to Story 2.2's endpoint shape; update its FE caller (`dashboard.service.ts`) in the same story, don't leave two shapes disagreeing
-- [ ] Task 2: Frontend — no-signal is a computed display override, not new backend state (AC: #1, #2, #3)
-  - [ ] `web/oee-shell/src/app/core/realtime/clock-tick.service.ts` — tiny signal-based service exposing a `nowMs` signal refreshed every ~10s via `setInterval` (injected `DestroyRef` to clear it). One shared ticking clock, not one `setInterval` per card
-  - [ ] `web/oee-shell/src/app/pages/dashboard/machine-status-card.ts` (Story 2.2): add a `computed()` combining `snapshot().lastReportedAt`, the injected threshold (passed down from `dashboard-page.ts`, which read it from Task 1's response), and `clockTick.nowMs()`. When `lastReportedAt` is set **and** `(now - lastReportedAt) > thresholdSeconds`, render the `status-no-signal` gray variant (icon: a "disconnected"/`pi-wifi`-off-style icon, distinct from every `MachineStatus` icon Story 2.2 defined) with label `dashboard.status.noSignal` ("Mất tín hiệu {{minutes}}p" / "No signal {{minutes}}m") — this **overrides** whatever `snapshot().status` says (AC #2: a machine last reported as `Stopped` 10 minutes ago must render gray no-signal, not red stopped, once past threshold). When `lastReportedAt` is `null` (never reported — Story 2.2's skeleton case), keep rendering the skeleton, not a no-signal card — "never connected" and "was connected, now silent" are different states and only the latter is this story's concern
-  - [ ] No special "recovery" code needed for AC #3: once a new `MachineStatusChanged` event updates `snapshot().lastReportedAt` (Story 2.2's existing SignalR handling), the `computed()` in the previous bullet re-evaluates on its own and the override clears — confirm this with a test (Task 4) rather than adding new logic
-  - [ ] Add `dashboard.status.noSignal` (and any other status-label keys Story 2.2 left implicit) to both `public/i18n/en.json` and `public/i18n/vi.json`
-- [ ] Task 3: Guardrail note for Story 2.5 (no code in this story)
-  - [ ] `DowntimeEvent` doesn't exist yet (Story 2.5 introduces it) — there is nothing to implement here for AC #2's "no-signal không bao giờ được tính là DowntimeEvent thật." This task exists only to make sure the constraint is written down before 2.5 starts: whatever opens/closes a `DowntimeEvent` in Story 2.5 must key off the machine's actual reported `Status` transitions (`Running` ↔ `Stopped`), never off a no-signal timeout. Silence (no new readings) must never itself fabricate a `DowntimeEvent` — flag this explicitly in Story 2.5's own Dev Notes when that story is created, don't rely on this story's Dev Notes surviving into that context unread
-- [ ] Task 4: Testing (all AC)
-  - [ ] `tests/OeeNew.Api.Tests/Production/ProductionStatusEndpointsTests.cs` (Story 2.2, extend) — response now includes `noSignalThresholdSeconds` matching configuration
-  - [ ] `web/oee-shell/src/app/pages/dashboard/machine-status-card.spec.ts` (Story 2.2, extend): `lastReportedAt` within threshold + `status: Stopped` → red stopped card (not gray); `lastReportedAt` older than threshold + `status: Stopped` → gray no-signal card with elapsed-minutes label, and this must visibly differ (different CSS class/color) from the stopped-card case in the same test file so a regression that makes them look identical is caught; `lastReportedAt: null` → still skeleton, not gray no-signal
-  - [ ] `web/oee-shell/src/app/pages/dashboard/dashboard-page.spec.ts` (Story 2.2, extend): simulate time passing past the threshold (fake the clock-tick signal or inject a controllable clock) on a card that had real data → card flips to no-signal without any new SignalR event; then simulate a `MachineStatusChanged` event arriving → card returns to its real status (AC #3)
+- [x] Task 1: Backend — single source of truth for the threshold (AC: #1)
+  - [x] `appsettings.json` (`src/OeeNew.Api/`): add `"Production": { "NoSignalThresholdSeconds": 60 }` — `[ASSUMPTION]` 60s is a placeholder default (no real machine cadence is known yet, same caveat the PRD itself flags for other MVP guesses); it must be a config value, not a hardcoded magic number, precisely so it can be tuned later without a code change
+  - [x] `src/OeeNew.Infrastructure/Production/ProductionOptions.cs` (or similar `Options` class bound to the `Production` section) exposing `NoSignalThresholdSeconds`
+  - [x] Extend the `GET /api/production/machine-states` response from Story 2.2 (`src/OeeNew.Api/Controllers/ProductionStatusController.cs`) to a small wrapper: `{ noSignalThresholdSeconds: number, machines: MachineStatusResponse[] }` instead of a bare array — one round trip gives the dashboard everything it needs to compute staleness itself. This is a deliberate change to Story 2.2's endpoint shape; update its FE caller (`dashboard.service.ts`) in the same story, don't leave two shapes disagreeing
+- [x] Task 2: Frontend — no-signal is a computed display override, not new backend state (AC: #1, #2, #3)
+  - [x] `web/oee-shell/src/app/core/realtime/clock-tick.service.ts` — tiny signal-based service exposing a `nowMs` signal refreshed every ~10s via `setInterval` (injected `DestroyRef` to clear it). One shared ticking clock, not one `setInterval` per card
+  - [x] `web/oee-shell/src/app/pages/dashboard/machine-status-card.ts` (Story 2.2): add a `computed()` combining `snapshot().lastReportedAt`, the injected threshold (passed down from `dashboard-page.ts`, which read it from Task 1's response), and `clockTick.nowMs()`. When `lastReportedAt` is set **and** `(now - lastReportedAt) > thresholdSeconds`, render the `status-no-signal` gray variant (icon: a "disconnected"/`pi-wifi`-off-style icon, distinct from every `MachineStatus` icon Story 2.2 defined) with label `dashboard.status.noSignal` ("Mất tín hiệu {{minutes}}p" / "No signal {{minutes}}m") — this **overrides** whatever `snapshot().status` says (AC #2: a machine last reported as `Stopped` 10 minutes ago must render gray no-signal, not red stopped, once past threshold). When `lastReportedAt` is `null` (never reported — Story 2.2's skeleton case), keep rendering the skeleton, not a no-signal card — "never connected" and "was connected, now silent" are different states and only the latter is this story's concern
+  - [x] No special "recovery" code needed for AC #3: once a new `MachineStatusChanged` event updates `snapshot().lastReportedAt` (Story 2.2's existing SignalR handling), the `computed()` in the previous bullet re-evaluates on its own and the override clears — confirm this with a test (Task 4) rather than adding new logic
+  - [x] Add `dashboard.status.noSignal` (and any other status-label keys Story 2.2 left implicit) to both `public/i18n/en.json` and `public/i18n/vi.json`
+- [x] Task 3: Guardrail note for Story 2.5 (no code in this story)
+  - [x] `DowntimeEvent` doesn't exist yet (Story 2.5 introduces it) — there is nothing to implement here for AC #2's "no-signal không bao giờ được tính là DowntimeEvent thật." This task exists only to make sure the constraint is written down before 2.5 starts: whatever opens/closes a `DowntimeEvent` in Story 2.5 must key off the machine's actual reported `Status` transitions (`Running` ↔ `Stopped`), never off a no-signal timeout. Silence (no new readings) must never itself fabricate a `DowntimeEvent` — flag this explicitly in Story 2.5's own Dev Notes when that story is created, don't rely on this story's Dev Notes surviving into that context unread
+- [x] Task 4: Testing (all AC)
+  - [x] `tests/OeeNew.Api.Tests/Production/ProductionStatusEndpointsTests.cs` (Story 2.2, extend) — response now includes `noSignalThresholdSeconds` matching configuration
+  - [x] `web/oee-shell/src/app/pages/dashboard/machine-status-card.spec.ts` (Story 2.2, extend): `lastReportedAt` within threshold + `status: Stopped` → red stopped card (not gray); `lastReportedAt` older than threshold + `status: Stopped` → gray no-signal card with elapsed-minutes label, and this must visibly differ (different CSS class/color) from the stopped-card case in the same test file so a regression that makes them look identical is caught; `lastReportedAt: null` → still skeleton, not gray no-signal
+  - [x] `web/oee-shell/src/app/pages/dashboard/dashboard-page.spec.ts` (Story 2.2, extend): simulate time passing past the threshold (fake the clock-tick signal or inject a controllable clock) on a card that had real data → card flips to no-signal without any new SignalR event; then simulate a `MachineStatusChanged` event arriving → card returns to its real status (AC #3)
 
 ## Dev Notes
 
@@ -63,8 +63,42 @@ so that I don't mistake a connectivity problem for a real stoppage.
 
 ### Agent Model Used
 
+Claude Sonnet 5 (Amelia — BMad dev agent)
+
 ### Debug Log References
+
+- Backend: `dotnet test` per project — Domain 59/59, Application 103/103, Architecture 2/2, Api 55/55 (219/219, all green; no regressions from Story 2.2's 218).
+- `npx ng build` — succeeds, no new budget warning.
+- `npx tsc -p tsconfig.spec.json --noEmit` — clean across the whole spec suite (no type errors). Per explicit user instruction mid-story to stop re-running the slow `ng test` suite, this type-check plus careful manual review is the verification this story's frontend tests received — they were **not executed** via `ng test` in this session. A follow-up `ng test` run is recommended before merging.
+- Test design note: the frontend specs pin `ClockTickService.nowMs` to a fixed baseline via `clockTick.nowMs.set(...)` instead of relying on the real wall clock — a fixed `lastReportedAt` compared against `Date.now()` at whatever moment the test happens to execute would otherwise make elapsed-time assertions flaky/time-dependent.
 
 ### Completion Notes List
 
+- Implemented exactly as scoped: no backend detection job/timer/persisted state for no-signal — `NoSignalThresholdSeconds` is the only new backend surface (config value, riding along in the existing `GET /api/production/machine-states` response), and the override logic itself lives entirely in `MachineStatusCard` as a computed check evaluated on each change-detection pass (driven by the new shared `ClockTickService` tick).
+- Confirmed the ordering constraint from Dev Notes: `MachineStatusCard`'s template checks `isNoSignal()` **before** falling through to the normal status-color branch, so a `Stopped` reading past the threshold renders gray no-signal, never red stopped.
+- Did not touch `IngestProductionReadingUseCase`, `MachineState`, or any Story 2.1/2.2 ingestion code.
+- Left Task 3 (Story 2.5 guardrail) as a Dev Notes-only reminder — no `DowntimeEvent` exists yet to guard.
+
 ### File List
+
+**Backend — new:**
+- `src/OeeNew.Infrastructure/Production/ProductionOptions.cs`
+
+**Backend — modified:**
+- `src/OeeNew.Api/appsettings.json` (+ `Production.NoSignalThresholdSeconds`)
+- `src/OeeNew.Api/Program.cs` (binds `ProductionOptions`)
+- `src/OeeNew.Api/Controllers/ProductionStatusController.cs` (response wrapped in `MachineStatesResponse` with the threshold)
+- `tests/OeeNew.Api.Tests/Production/ProductionStatusEndpointsTests.cs` (updated for the new response shape + new threshold assertion)
+
+**Frontend — new:**
+- `web/oee-shell/src/app/core/realtime/clock-tick.service.ts`
+
+**Frontend — modified:**
+- `web/oee-shell/src/app/pages/dashboard/dashboard.service.ts` (`MachineStatesResult` wrapper type)
+- `web/oee-shell/src/app/pages/dashboard/dashboard-page.ts` (reads/threads the threshold; extended tests)
+- `web/oee-shell/src/app/pages/dashboard/machine-status-card.ts` (no-signal override, extended tests)
+- `web/oee-shell/public/i18n/en.json`, `public/i18n/vi.json` (+ `dashboard.status.noSignal`)
+
+## Change Log
+
+- 2026-07-21: Initial implementation — no-signal detection as a presentation-layer override (FR-003), config-driven threshold shared via the existing machine-states endpoint, shared `ClockTickService` driving periodic re-evaluation. Backend 219/219 tests passing; frontend type-checked clean but not executed via `ng test` in this session per user request. Status → review.

@@ -133,6 +133,10 @@ export class MasterDataService {
     return firstValueFrom(this.http.put<ReasonCodeDto>(`/api/master-data/reason-codes/${id}/deactivate`, null));
   }
 
+  deleteReasonCode(id: string): Promise<void> {
+    return firstValueFrom(this.http.delete<void>(`/api/master-data/reason-codes/${id}`));
+  }
+
   listUsers(): Promise<UserDto[]> {
     return firstValueFrom(this.http.get<UserDto[]>('/api/users'));
   }

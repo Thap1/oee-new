@@ -21,7 +21,22 @@
       "Running": "Đang chạy",
       "Stopped": "Dừng",
       "Idle": "Chờ",
-      "Fault": "Lỗi"
+      "Fault": "Lỗi",
+      "noSignal": "Mất tín hiệu {{minutes}}p"
+    },
+    "emptyState": {
+      "title": "Chưa có máy nào được gán cho bạn",
+      "message": "Vui lòng liên hệ Admin để được gán máy/line phù hợp."
+    },
+    "loadError": {
+      "title": "Không tải được trạng thái máy",
+      "message": "Kiểm tra kết nối mạng và thử lại.",
+      "retry": "Thử lại"
+    },
+    "qualityReject": {
+      "title": "Ghi nhận phế phẩm",
+      "quantity": "Số lượng",
+      "submit": "Lưu"
     }
   },
   "masterData": {

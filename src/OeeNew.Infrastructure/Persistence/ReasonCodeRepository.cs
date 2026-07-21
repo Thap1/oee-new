@@ -21,4 +21,10 @@ public sealed class ReasonCodeRepository(OeeDbContext context) : IReasonCodeRepo
 
     public Task UpdateAsync(ReasonCode reasonCode, CancellationToken cancellationToken = default) =>
         context.SaveChangesAsync(cancellationToken);
+
+    public Task DeleteAsync(ReasonCode reasonCode, CancellationToken cancellationToken = default)
+    {
+        context.ReasonCodes.Remove(reasonCode);
+        return context.SaveChangesAsync(cancellationToken);
+    }
 }

@@ -21,7 +21,22 @@
       "Running": "Running",
       "Stopped": "Stopped",
       "Idle": "Idle",
-      "Fault": "Fault"
+      "Fault": "Fault",
+      "noSignal": "No signal {{minutes}}m"
+    },
+    "emptyState": {
+      "title": "No machines have been assigned to you yet",
+      "message": "Please contact your Admin to get assigned to a machine or line."
+    },
+    "loadError": {
+      "title": "Could not load machine statuses",
+      "message": "Check your connection and try again.",
+      "retry": "Retry"
+    },
+    "qualityReject": {
+      "title": "Record Quality Reject",
+      "quantity": "Quantity",
+      "submit": "Save"
     }
   },
   "masterData": {

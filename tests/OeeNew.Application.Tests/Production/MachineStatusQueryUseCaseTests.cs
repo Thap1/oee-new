@@ -14,34 +14,36 @@ public class MachineStatusQueryUseCaseTests
     public async Task ListAsync_GlobalScope_ReturnsAllMachines()
     {
         var machines = new FakeMachineRepository();
+        var lines = new FakeLineRepository();
         var states = new FakeMachineStateRepository();
         var siteA = Guid.NewGuid();
         var siteB = Guid.NewGuid();
-        var lineA = Guid.NewGuid();
-        var lineB = Guid.NewGuid();
+        var lineA = lines.Seed("Line A", siteA);
+        var lineB = lines.Seed("Line B", siteB);
         var machineA = machines.Seed("Machine A", lineA, siteA);
         var machineB = machines.Seed("Machine B", lineB, siteB);
-        var useCase = new MachineStatusQueryUseCase(machines, states);
+        var useCase = new MachineStatusQueryUseCase(machines, lines, states);
 
         var result = await useCase.ListAsync(CallerScope.Global);
 
         Assert.Equal(2, result.Count);
-        Assert.Contains(result, s => s.MachineId == machineA);
-        Assert.Contains(result, s => s.MachineId == machineB);
+        Assert.Contains(result, s => s.MachineId == machineA && s.SiteId == siteA);
+        Assert.Contains(result, s => s.MachineId == machineB && s.SiteId == siteB);
     }
 
     [Fact]
     public async Task ListAsync_ScopedCaller_ReturnsOnlyInScopeMachines()
     {
         var machines = new FakeMachineRepository();
+        var lines = new FakeLineRepository();
         var states = new FakeMachineStateRepository();
         var siteA = Guid.NewGuid();
         var siteB = Guid.NewGuid();
-        var lineA = Guid.NewGuid();
-        var lineB = Guid.NewGuid();
+        var lineA = lines.Seed("Line A", siteA);
+        var lineB = lines.Seed("Line B", siteB);
         var machineA = machines.Seed("Machine A", lineA, siteA);
         machines.Seed("Machine B", lineB, siteB);
-        var useCase = new MachineStatusQueryUseCase(machines, states);
+        var useCase = new MachineStatusQueryUseCase(machines, lines, states);
         var scope = new CallerScope(false, [siteA], []);
 
         var result = await useCase.ListAsync(scope);
@@ -54,9 +56,12 @@ public class MachineStatusQueryUseCaseTests
     public async Task ListAsync_MachineWithNoState_ReturnsNullStatus()
     {
         var machines = new FakeMachineRepository();
+        var lines = new FakeLineRepository();
         var states = new FakeMachineStateRepository();
-        var machineId = machines.Seed("Machine A", Guid.NewGuid());
-        var useCase = new MachineStatusQueryUseCase(machines, states);
+        var siteId = Guid.NewGuid();
+        var lineId = lines.Seed("Line A", siteId);
+        var machineId = machines.Seed("Machine A", lineId, siteId);
+        var useCase = new MachineStatusQueryUseCase(machines, lines, states);
 
         var result = await useCase.ListAsync(CallerScope.Global);
 
@@ -71,10 +76,13 @@ public class MachineStatusQueryUseCaseTests
     public async Task ListAsync_MachineWithState_ReturnsItsLatestReading()
     {
         var machines = new FakeMachineRepository();
+        var lines = new FakeLineRepository();
         var states = new FakeMachineStateRepository();
-        var machineId = machines.Seed("Machine A", Guid.NewGuid());
+        var siteId = Guid.NewGuid();
+        var lineId = lines.Seed("Line A", siteId);
+        var machineId = machines.Seed("Machine A", lineId, siteId);
         await states.UpsertAsync(new MachineState(machineId, MachineStatus.Running, 7, BaseTime));
-        var useCase = new MachineStatusQueryUseCase(machines, states);
+        var useCase = new MachineStatusQueryUseCase(machines, lines, states);
 
         var result = await useCase.ListAsync(CallerScope.Global);
 

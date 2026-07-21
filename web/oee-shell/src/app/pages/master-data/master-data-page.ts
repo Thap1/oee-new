@@ -429,6 +429,21 @@ export class MasterDataPage implements OnInit {
     }
   }
 
+  async deleteReasonCode(reasonCode: ReasonCodeDto): Promise<void> {
+    if (!confirm(this.translate.instant('masterData.confirmDelete', { name: reasonCode.name }))) {
+      return;
+    }
+    this.error.set(null);
+    try {
+      await this.masterData.deleteReasonCode(reasonCode.id);
+      this.reasonCodes.update((list) => list.filter((r) => r.id !== reasonCode.id));
+    } catch (err) {
+      // Story 2.5 AC #5: a 409 HAS_DEPENDENTS here means Admin must deactivate instead —
+      // handleError already renders masterData.error.hasDependents, no special-casing needed.
+      await this.handleError(err);
+    }
+  }
+
   openCreateUser(): void {
     this.error.set(null);
     this.userDialogUsername.set('');

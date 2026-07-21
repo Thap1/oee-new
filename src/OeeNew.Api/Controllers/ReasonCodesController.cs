@@ -40,6 +40,14 @@ public sealed class ReasonCodesController(ReasonCodeManagementUseCase useCase) :
         return Ok(ToResponse(reasonCode));
     }
 
+    [HttpDelete("api/master-data/reason-codes/{id:guid}")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        await useCase.DeleteAsync(CallerRole, id, cancellationToken);
+        return NoContent();
+    }
+
     private string? CallerRole => User.FindFirstValue(OeeClaimTypes.Role);
 
     private static ReasonCodeResponse ToResponse(ReasonCode reasonCode) =>
