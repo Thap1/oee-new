@@ -1,0 +1,9 @@
+**/bin
+**/obj
+web/oee-shell/node_modules
+web/oee-shell/dist
+.git
+_bmad
+_bmad-output
+docs
+tests

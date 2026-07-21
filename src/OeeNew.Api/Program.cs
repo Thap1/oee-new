@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,13 @@ using OeeNew.Infrastructure.Identity;
 using OeeNew.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Render (and similar PaaS hosts) assign the listen port via $PORT at runtime.
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrEmpty(port))
+{
+    builder.WebHost.UseUrls($"http://+:{port}");
+}
 
 // AppMode: Site | Central (Architecture Spine AD-2) — same binary, different modules enabled.
 var appMode = builder.Configuration.GetValue<string>("AppMode") ?? "Site";
@@ -148,6 +156,14 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+// Opt-in: apply EF Core migrations at boot. There's no separate migration/job-runner step in this
+// deployment (e.g. Render free tier), so this is how the schema gets created/updated in that environment.
+if (builder.Configuration.GetValue<bool>("RunMigrationsOnStartup"))
+{
+    using var migrationScope = app.Services.CreateScope();
+    migrationScope.ServiceProvider.GetRequiredService<OeeDbContext>().Database.Migrate();
+}
+
 app.UseExceptionHandler(_ => { });
 
 if (app.Environment.IsDevelopment())
@@ -155,7 +171,17 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+// Render terminates TLS at the edge and forwards plain HTTP; without this, UseHttpsRedirection()
+// can't see the original scheme and redirect-loops.
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+});
+
 app.UseHttpsRedirection();
+
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 app.UseRateLimiter();
 
@@ -166,6 +192,9 @@ app.MapControllers();
 
 app.MapGet("/.well-known/jwks.json", (IJwtSigningKeyProvider provider) =>
     JwksDocumentBuilder.Build(provider.GetValidationKeys())).AllowAnonymous();
+
+// SPA client-side routing fallback — only reached when no controller/static-file route matched.
+app.MapFallbackToFile("index.html");
 
 app.Run();
 
