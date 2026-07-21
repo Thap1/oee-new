@@ -16,6 +16,14 @@
   "placeholder": {
     "comingLater": "Tính năng này sẽ được xây dựng ở epic sau."
   },
+  "dashboard": {
+    "status": {
+      "Running": "Đang chạy",
+      "Stopped": "Dừng",
+      "Idle": "Chờ",
+      "Fault": "Lỗi"
+    }
+  },
   "masterData": {
     "sites": "Site",
     "lines": "Line",

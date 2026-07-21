@@ -4,7 +4,7 @@ baseline_commit: 153bffe33e1cfaa4730411a270388f54b0c1bd21
 
 # Story 2.1: Nhận & chuẩn hoá dữ liệu sản xuất từ máy (Ingestion)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -24,32 +24,32 @@ so that OEE calculation logic never changes when a new machine type or protocol 
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Domain layer — normalized reading contract + current-state entity (AC: #1, #2, #3)
-  - [ ] `src/OeeNew.Domain/Production/MachineStatus.cs` — enum `Running | Stopped | Idle | Fault` (AD-3's fixed enum, not a free string)
-  - [ ] `src/OeeNew.Domain/Production/IProductionDataSource.cs` — interface with `Guid MachineId`, `DateTimeOffset Timestamp`, `long Counter`, `MachineStatus Status`. This is the ONLY shape Domain/Application ever see; any adapter (real protocol, manual entry, simulated script) implements or maps into it in Infrastructure/Api, never the reverse
-  - [ ] `src/OeeNew.Domain/Production/MachineState.cs` — one row per Machine holding its latest known reading: `MachineId` (PK, matches `Machine.Id` 1:1), `Status`, `Counter`, `LastReportedAt`. Constructor for first-ever reading; an `Apply(MachineStatus status, long counter, DateTimeOffset reportedAt)` method for subsequent readings that **ignores an incoming reading whose `reportedAt` is older than the currently stored `LastReportedAt`** (out-of-order network delivery guard — return a `bool` indicating whether the update was applied, don't throw: a stale packet is a normal, expected occurrence, not an error)
-- [ ] Task 2: Application layer — single ingestion path for automatic + manual (AC: #1, #4, #5)
-  - [ ] `src/OeeNew.Application/Production/IMachineStateRepository.cs` — `GetAsync(machineId)`, `UpsertAsync(state)` (mirrors `IMachineRepository`'s shape)
-  - [ ] `src/OeeNew.Application/Production/IngestProductionReadingUseCase.cs` — single method `IngestAsync(CallerScope scope, IProductionDataSource reading, string? callerRole, CancellationToken)`:
+- [x] Task 1: Domain layer — normalized reading contract + current-state entity (AC: #1, #2, #3)
+  - [x] `src/OeeNew.Domain/Production/MachineStatus.cs` — enum `Running | Stopped | Idle | Fault` (AD-3's fixed enum, not a free string)
+  - [x] `src/OeeNew.Domain/Production/IProductionDataSource.cs` — interface with `Guid MachineId`, `DateTimeOffset Timestamp`, `long Counter`, `MachineStatus Status`. This is the ONLY shape Domain/Application ever see; any adapter (real protocol, manual entry, simulated script) implements or maps into it in Infrastructure/Api, never the reverse
+  - [x] `src/OeeNew.Domain/Production/MachineState.cs` — one row per Machine holding its latest known reading: `MachineId` (PK, matches `Machine.Id` 1:1), `Status`, `Counter`, `LastReportedAt`. Constructor for first-ever reading; an `Apply(MachineStatus status, long counter, DateTimeOffset reportedAt)` method for subsequent readings that **ignores an incoming reading whose `reportedAt` is older than the currently stored `LastReportedAt`** (out-of-order network delivery guard — return a `bool` indicating whether the update was applied, don't throw: a stale packet is a normal, expected occurrence, not an error)
+- [x] Task 2: Application layer — single ingestion path for automatic + manual (AC: #1, #4, #5)
+  - [x] `src/OeeNew.Application/Production/IMachineStateRepository.cs` — `GetAsync(machineId)`, `UpsertAsync(state)` (mirrors `IMachineRepository`'s shape)
+  - [x] `src/OeeNew.Application/Production/IngestProductionReadingUseCase.cs` — single method `IngestAsync(CallerScope scope, IProductionDataSource reading, string? callerRole, CancellationToken)`:
     - Reject if `callerRole` is not `"Operator"` or `"Admin"` (reuse the `MasterDataForbiddenException` — same convention as `MasterDataAuthorization.EnsureAdmin`, just a wider role set since Operators submit readings, not just Admins)
     - Resolve the `Machine` via `IMachineRepository.GetAsync(reading.MachineId)` → `MasterDataParentNotFoundException("Machine", reading.MachineId)` if missing (same exception/status code as Story 1.2's parent-not-found convention → 400 `PARENT_NOT_FOUND`)
     - If `!scope.IsGlobal`: resolve the Machine's parent `Line` via `ILineRepository.GetAsync(machine.LineId)`, then `MasterDataForbiddenException` unless `scope.AllowsSite(line.SiteId) && scope.AllowsLine(machine.LineId)` — identical pattern to `MachineManagementUseCase.ListByLineAsync`
     - Load existing `MachineState` (if any); construct new state on first reading, or call `Apply(...)` on the existing one; `UpsertAsync` regardless of whether `Apply` reports the reading was stale (still worth confirming plumbing works end-to-end, just a no-op on the stored values)
-  - [ ] **Do not** add any dependency on a Sync/Central client from this use case or its repository — AC #5 is proven by the *absence* of such a call, not by a runtime "is Central reachable" branch. `IngestProductionReadingUseCase` only ever talks to the local `OeeDbContext` via `IMachineStateRepository`/`IMachineRepository`/`ILineRepository`
-- [ ] Task 3: Infrastructure — persistence (AC: #1, #2)
-  - [ ] `src/OeeNew.Infrastructure/Persistence/MachineStateRepository.cs` implementing `IMachineStateRepository` against `OeeDbContext` (mirror `MachineRepository.cs`'s shape: thin, no logic)
-  - [ ] `OeeDbContext`: add `DbSet<MachineState> MachineStates`; map in `OnModelCreating` — table `MachineState`, `HasKey(s => s.MachineId)` (no separate `Id`; 1:1 with `Machine`), `Counter` as `bigint`, `Status` via `HasConversion<short>()` (match `ReasonCode.LossCategory`'s existing smallint-enum convention, not a string column), `HasOne<Machine>().WithOne().HasForeignKey<MachineState>(s => s.MachineId).OnDelete(DeleteBehavior.Restrict)`
-  - [ ] EF Core migration `AddMachineState` (`dotnet ef migrations add AddMachineState --project src/OeeNew.Infrastructure --startup-project src/OeeNew.Api`)
-- [ ] Task 4: Api — one ingestion endpoint for both automatic and manual callers (AC: #1, #3, #4)
-  - [ ] `src/OeeNew.Api/Controllers/ProductionReadingsController.cs`:
+  - [x] **Do not** add any dependency on a Sync/Central client from this use case or its repository — AC #5 is proven by the *absence* of such a call, not by a runtime "is Central reachable" branch. `IngestProductionReadingUseCase` only ever talks to the local `OeeDbContext` via `IMachineStateRepository`/`IMachineRepository`/`ILineRepository`
+- [x] Task 3: Infrastructure — persistence (AC: #1, #2)
+  - [x] `src/OeeNew.Infrastructure/Persistence/MachineStateRepository.cs` implementing `IMachineStateRepository` against `OeeDbContext` (mirror `MachineRepository.cs`'s shape: thin, no logic)
+  - [x] `OeeDbContext`: add `DbSet<MachineState> MachineStates`; map in `OnModelCreating` — table `MachineState`, `HasKey(s => s.MachineId)` (no separate `Id`; 1:1 with `Machine`), `Counter` as `bigint`, `Status` via `HasConversion<short>()` (match `ReasonCode.LossCategory`'s existing smallint-enum convention, not a string column), `HasOne<Machine>().WithOne().HasForeignKey<MachineState>(s => s.MachineId).OnDelete(DeleteBehavior.Restrict)`
+  - [x] EF Core migration `AddMachineState` (`dotnet ef migrations add AddMachineState --project src/OeeNew.Infrastructure --startup-project src/OeeNew.Api`)
+- [x] Task 4: Api — one ingestion endpoint for both automatic and manual callers (AC: #1, #3, #4)
+  - [x] `src/OeeNew.Api/Controllers/ProductionReadingsController.cs`:
     - `public sealed record IngestReadingRequest(Guid MachineId, DateTimeOffset Timestamp, long Counter, MachineStatus Status) : IProductionDataSource;` — the request DTO implements the Domain interface directly (no separate mapping step); this is what makes "same domain path" for AC #4 structurally true rather than a claim to re-verify later
     - `POST /api/production/readings`, `[Authorize]` (role/scope check happens inside the use case per Task 2, matching how Story 1.6 keeps enforcement in one place instead of duplicating it in both the policy attribute and the use case)
     - Response: `204 NoContent` on success (no read-back needed; the caller already knows what it sent)
-  - [ ] Do **not** add a second `/manual-entry` route or an Angular manual-entry form in this story — see Dev Notes "Scope decision: no dedicated manual-entry endpoint"
-- [ ] Task 5: Testing (all AC)
-  - [ ] `tests/OeeNew.Domain.Tests/Production/MachineStateTests.cs` — first reading stored as-is; newer reading overwrites; older (`reportedAt` before current `LastReportedAt`) reading is ignored (returns `false`, values unchanged)
-  - [ ] `tests/OeeNew.Application.Tests/Production/FakeMachineStateRepository.cs` + `IngestProductionReadingUseCaseTests.cs` — `FakeMachineRepository`/`FakeLineRepository` (`OeeNew.Application.Tests.MasterData`) are `internal`, which is assembly-scoped, not namespace-scoped: reference them directly via a `using OeeNew.Application.Tests.MasterData;` in the new test file, don't duplicate them. Only write a new `FakeMachineStateRepository` (no existing equivalent). Cover: unknown machine → `MasterDataParentNotFoundException`; Manager/Viewer role → `MasterDataForbiddenException`; Operator scoped to a different Line → `MasterDataForbiddenException`; valid reading → `MachineState` persisted with correct values; stale reading → prior state untouched
-  - [ ] `tests/OeeNew.Api.Tests/Production/ProductionReadingsEndpointsTests.cs` (reuse `MasterDataApiFactory` from `OeeNew.Api.Tests.MasterData` for the Postgres-backed `WebApplicationFactory` + `CreateTokenFor` helper — don't build a second factory): valid Operator/Admin token + real Machine → 204 and a row in `MachineState`; invalid `Status` string in the JSON body → 400 with the standard `VALIDATION_ERROR` envelope (proves AC #3 without any hand-written enum-parsing code — the existing `JsonStringEnumConverter` registered in `Program.cs` plus the `InvalidModelStateResponseFactory` already wired for master-data 400s handles this); Manager/Viewer token → 403; same endpoint called twice back-to-back with different tokens (one "automatic", one representing what a manual-entry caller would send) both land in the same `MachineState` row — this is the test that stands in for AC #4
+  - [x] Do **not** add a second `/manual-entry` route or an Angular manual-entry form in this story — see Dev Notes "Scope decision: no dedicated manual-entry endpoint"
+- [x] Task 5: Testing (all AC)
+  - [x] `tests/OeeNew.Domain.Tests/Production/MachineStateTests.cs` — first reading stored as-is; newer reading overwrites; older (`reportedAt` before current `LastReportedAt`) reading is ignored (returns `false`, values unchanged)
+  - [x] `tests/OeeNew.Application.Tests/Production/FakeMachineStateRepository.cs` + `IngestProductionReadingUseCaseTests.cs` — `FakeMachineRepository`/`FakeLineRepository` (`OeeNew.Application.Tests.MasterData`) are `internal`, which is assembly-scoped, not namespace-scoped: reference them directly via a `using OeeNew.Application.Tests.MasterData;` in the new test file, don't duplicate them. Only write a new `FakeMachineStateRepository` (no existing equivalent). Cover: unknown machine → `MasterDataParentNotFoundException`; Manager/Viewer role → `MasterDataForbiddenException`; Operator scoped to a different Line → `MasterDataForbiddenException`; valid reading → `MachineState` persisted with correct values; stale reading → prior state untouched
+  - [x] `tests/OeeNew.Api.Tests/Production/ProductionReadingsEndpointsTests.cs` (reuse `MasterDataApiFactory` from `OeeNew.Api.Tests.MasterData` for the Postgres-backed `WebApplicationFactory` + `CreateTokenFor` helper — don't build a second factory): valid Operator/Admin token + real Machine → 204 and a row in `MachineState`; invalid `Status` string in the JSON body → 400 with the standard `VALIDATION_ERROR` envelope (proves AC #3 without any hand-written enum-parsing code — the existing `JsonStringEnumConverter` registered in `Program.cs` plus the `InvalidModelStateResponseFactory` already wired for master-data 400s handles this); Manager/Viewer token → 403; same endpoint called twice back-to-back with different tokens (one "automatic", one representing what a manual-entry caller would send) both land in the same `MachineState` row — this is the test that stands in for AC #4
 
 ## Dev Notes
 
@@ -85,8 +85,44 @@ so that OEE calculation logic never changes when a new machine type or protocol 
 
 ### Agent Model Used
 
+Claude Sonnet 5 (Amelia — BMad dev agent)
+
 ### Debug Log References
+
+- `dotnet test` per project: Domain 59/59, Application 97/97, Architecture 2/2, Api 51/51 (all green; +17 new tests over the pre-story 192 baseline: 4 Domain, 8 Application, 5 Api).
+- `dotnet ef migrations add AddMachineState --project src/OeeNew.Infrastructure --startup-project src/OeeNew.Api` — generated cleanly, reviewed the generated `Up`/`Down` before applying.
+- `dotnet ef database update` against local `oeenew_test` — applied without error (`MachineState` table created with the expected FK `Restrict` to `Machine`).
+- `dotnet build src/OeeNew.Api/OeeNew.Api.csproj` — succeeds with only the pre-existing `Microsoft.OpenApi`/`SQLitePCLRaw` advisory warnings (unrelated to this story).
 
 ### Completion Notes List
 
+- Implemented exactly as scoped in Dev Notes: single ingestion path (`IngestProductionReadingUseCase` + `POST /api/production/readings`), no second manual-entry route, no SignalR wiring, no Sync/Central dependency anywhere in the ingestion write path.
+- One deliberate deviation from the task's literal signature: `MachineState`'s constructor parameter is named `lastReportedAt` (not `reportedAt` as in the story's prose) so EF Core's constructor-binding convention matches it to the `LastReportedAt` property by name — using `reportedAt` there causes EF model-building to fail to bind that parameter. `MachineState.Apply(...)`'s own parameter stays `reportedAt` since it isn't used for materialization.
+- `MachineStateRepository.UpsertAsync` handles both the "brand new state, never tracked" case (`Add`) and the "already-tracked, mutated in place via `Apply`" case (already `Modified`, just needs `SaveChanges`) by checking `EntityState.Detached` rather than re-querying — avoids a redundant round trip for the common (existing-machine) path.
+- AC #4 ("giống hệt ingestion tự động") is proven at the API test level by two different callers (different JWTs/roles) hitting the identical endpoint and landing in the same `MachineState` row — there is structurally only one code path, so no separate "manual entry" scenario exists to diverge from it.
+- Confirmed `tests/OeeNew.Architecture.Tests` still passes 2/2 after adding the `Production` namespace — `MachineState`/`IProductionDataSource` in `OeeNew.Domain` have no Infrastructure/Api references, consistent with AD-1.
+
 ### File List
+
+**Backend — new:**
+- `src/OeeNew.Domain/Production/MachineStatus.cs`
+- `src/OeeNew.Domain/Production/IProductionDataSource.cs`
+- `src/OeeNew.Domain/Production/MachineState.cs`
+- `src/OeeNew.Application/Production/IMachineStateRepository.cs`
+- `src/OeeNew.Application/Production/IngestProductionReadingUseCase.cs`
+- `src/OeeNew.Infrastructure/Persistence/MachineStateRepository.cs`
+- `src/OeeNew.Infrastructure/Persistence/Migrations/20260721131824_AddMachineState.cs` (+ `.Designer.cs`)
+- `src/OeeNew.Api/Controllers/ProductionReadingsController.cs`
+- `tests/OeeNew.Domain.Tests/Production/MachineStateTests.cs`
+- `tests/OeeNew.Application.Tests/Production/FakeMachineStateRepository.cs`
+- `tests/OeeNew.Application.Tests/Production/IngestProductionReadingUseCaseTests.cs`
+- `tests/OeeNew.Api.Tests/Production/ProductionReadingsEndpointsTests.cs`
+
+**Backend — modified:**
+- `src/OeeNew.Infrastructure/Persistence/OeeDbContext.cs` (`MachineStates` `DbSet` + `OnModelCreating` mapping)
+- `src/OeeNew.Infrastructure/Persistence/Migrations/OeeDbContextModelSnapshot.cs` (EF-generated)
+- `src/OeeNew.Api/Program.cs` (registered `IMachineStateRepository`/`IngestProductionReadingUseCase`)
+
+## Change Log
+
+- 2026-07-21: Initial implementation — single ingestion endpoint (`POST /api/production/readings`) backed by `IngestProductionReadingUseCase`, `MachineState` current-state table, out-of-order-reading guard, Operator/Admin role + Story 1.6 `CallerScope` enforcement. 209/209 backend tests passing (59 Domain, 97 Application, 2 Architecture, 51 Api). Status → review.

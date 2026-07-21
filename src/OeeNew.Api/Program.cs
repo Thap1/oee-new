@@ -13,8 +13,16 @@ using OeeNew.Api.Errors;
 using OeeNew.Application.Auth;
 using OeeNew.Application.Identity;
 using OeeNew.Application.MasterData;
+using OeeNew.Application.Production;
 using OeeNew.Infrastructure.Identity;
 using OeeNew.Infrastructure.Persistence;
+using OeeNew.Infrastructure.RealTime;
+
+// Constrained containers (e.g. Render's free tier) hit the OS inotify-instance limit from
+// appsettings.json's FileSystemWatcher-based hot-reload, crashing WebApplication.CreateBuilder()
+// itself. Config never changes at runtime in a container deploy, so disable reload-on-change —
+// this must be set before CreateBuilder() runs, since that's when it's read.
+Environment.SetEnvironmentVariable("DOTNET_hostBuilder__reloadConfigOnChange", "false");
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,6 +68,15 @@ builder.Services.AddScoped<MachineManagementUseCase>();
 builder.Services.AddScoped<ShiftScheduleManagementUseCase>();
 builder.Services.AddScoped<ReasonCodeManagementUseCase>();
 builder.Services.AddScoped<UserManagementUseCase>();
+
+// Production ingestion (Story 2.1 — FR-001/002/003, AD-3): same local Postgres, no Central dependency.
+builder.Services.AddScoped<IMachineStateRepository, MachineStateRepository>();
+builder.Services.AddScoped<IngestProductionReadingUseCase>();
+builder.Services.AddScoped<MachineStatusQueryUseCase>();
+
+// Real-time dashboard (Story 2.2 — FR-004, NFR-1, AD-8): one hub for this site instance.
+builder.Services.AddSignalR();
+builder.Services.AddScoped<IMachineStatusNotifier, SignalRMachineStatusNotifier>();
 
 builder.Services.AddControllers()
     // UserRole (Story 1.4) as "Admin"/"Manager"/... in JSON, matching the JWT role claim's string form.
@@ -192,6 +209,8 @@ app.MapControllers();
 
 app.MapGet("/.well-known/jwks.json", (IJwtSigningKeyProvider provider) =>
     JwksDocumentBuilder.Build(provider.GetValidationKeys())).AllowAnonymous();
+
+app.MapHub<MachineStatusHub>("/hubs/machine-status").RequireAuthorization();
 
 // SPA client-side routing fallback — only reached when no controller/static-file route matched.
 app.MapFallbackToFile("index.html");

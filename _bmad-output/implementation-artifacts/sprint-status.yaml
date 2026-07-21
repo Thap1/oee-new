@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-18
-last_updated: 2026-07-20
+last_updated: 2026-07-21
 project: oee-new
 project_key: NOKEY
 tracking_system: file-system
@@ -58,12 +58,12 @@ development_status:
   epic-1-retrospective: optional
 
   epic-2: in-progress
-  2-1-production-data-ingestion: ready-for-dev
-  2-2-realtime-machine-status-dashboard: backlog
-  2-3-no-signal-detection: backlog
-  2-4-scoped-multi-machine-dashboard: backlog
-  2-5-downtime-reason-picker: backlog
-  2-6-quality-reject-recording: backlog
+  2-1-production-data-ingestion: review
+  2-2-realtime-machine-status-dashboard: in-progress
+  2-3-no-signal-detection: ready-for-dev
+  2-4-scoped-multi-machine-dashboard: ready-for-dev
+  2-5-downtime-reason-picker: ready-for-dev
+  2-6-quality-reject-recording: ready-for-dev
   epic-2-retrospective: optional
 
   epic-3: backlog

@@ -1,3 +1,4 @@
+using OeeNew.Application.Auth;
 using OeeNew.Application.MasterData;
 using OeeNew.Domain.MasterData;
 
@@ -80,6 +81,10 @@ internal sealed class FakeLineRepository : ILineRepository
 internal sealed class FakeMachineRepository : IMachineRepository
 {
     private readonly Dictionary<Guid, Machine> _machines = new();
+    // Precomputed Line->Site per machine at seed time, standing in for the real repository's
+    // Machine->Line join (Story 2.2's ListByScopeAsync) — defaults to Guid.Empty for the many
+    // pre-existing 2-arg Seed(...) call sites that never exercise scope-filtering.
+    private readonly Dictionary<Guid, Guid> _machineSiteIds = new();
 
     public Task<Machine> AddAsync(Machine machine, CancellationToken cancellationToken = default)
     {
@@ -94,6 +99,19 @@ internal sealed class FakeMachineRepository : IMachineRepository
     public Task<IReadOnlyList<Machine>> ListByLineAsync(Guid lineId, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<Machine>>(_machines.Values.Where(m => m.LineId == lineId).ToList());
 
+    public Task<IReadOnlyList<Machine>> ListByScopeAsync(CallerScope scope, CancellationToken cancellationToken = default)
+    {
+        IEnumerable<Machine> query = _machines.Values;
+        if (!scope.IsGlobal)
+        {
+            query = query.Where(m =>
+                scope.SiteIds.Contains(_machineSiteIds.GetValueOrDefault(m.Id)) &&
+                (scope.LineIds.Count == 0 || scope.LineIds.Contains(m.LineId)));
+        }
+
+        return Task.FromResult<IReadOnlyList<Machine>>(query.OrderBy(m => m.Name).ToList());
+    }
+
     public Task UpdateAsync(Machine machine, CancellationToken cancellationToken = default)
     {
         _machines[machine.Id] = machine;
@@ -106,10 +124,11 @@ internal sealed class FakeMachineRepository : IMachineRepository
         return Task.CompletedTask;
     }
 
-    public Guid Seed(string name, Guid lineId)
+    public Guid Seed(string name, Guid lineId, Guid siteId = default)
     {
         var machine = new Machine(Guid.NewGuid(), name, lineId);
         _machines[machine.Id] = machine;
+        _machineSiteIds[machine.Id] = siteId;
         return machine.Id;
     }
 }

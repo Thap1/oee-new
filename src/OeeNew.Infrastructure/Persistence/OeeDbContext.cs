@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OeeNew.Domain.Identity;
 using OeeNew.Domain.MasterData;
+using OeeNew.Domain.Production;
 
 namespace OeeNew.Infrastructure.Persistence;
 
@@ -16,6 +17,7 @@ public sealed class OeeDbContext(DbContextOptions<OeeDbContext> options) : DbCon
     public DbSet<ShiftSchedule> ShiftSchedules => Set<ShiftSchedule>();
     public DbSet<ReasonCode> ReasonCodes => Set<ReasonCode>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<MachineState> MachineStates => Set<MachineState>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -97,6 +99,18 @@ public sealed class OeeDbContext(DbContextOptions<OeeDbContext> options) : DbCon
             // consistent with how Story 1.2/1.3's other existence checks are app-level, not DB-level.
             user.Property(u => u.SiteIds).HasColumnType("uuid[]");
             user.Property(u => u.LineIds).HasColumnType("uuid[]");
+        });
+
+        modelBuilder.Entity<MachineState>(state =>
+        {
+            state.ToTable("MachineState");
+            // 1:1 with Machine — no separate surrogate id, the Machine's own id is the key.
+            state.HasKey(s => s.MachineId);
+            state.Property(s => s.MachineId).HasColumnType("uuid").ValueGeneratedNever();
+            state.Property(s => s.Status).HasConversion<short>().IsRequired();
+            state.Property(s => s.Counter).HasColumnType("bigint");
+            state.Property(s => s.LastReportedAt).IsRequired();
+            state.HasOne<Machine>().WithOne().HasForeignKey<MachineState>(s => s.MachineId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

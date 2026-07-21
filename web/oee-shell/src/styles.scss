@@ -1,1 +1,18 @@
 /* You can add global styles to this file, and also import other style files */
+
+/* Machine status colors + shopfloor typography (DESIGN.md — brand-layer delta over Sakai/PrimeOne).
+   Defined once here so Story 2.3's no-signal card and later dashboard/report work reuse the same
+   tokens instead of re-deriving hex values. */
+:root {
+  --status-running: #22c55e;
+  --status-running-fg: #ffffff;
+  --status-stopped: #ef4444;
+  --status-stopped-fg: #ffffff;
+  --status-idle: #f59e0b;
+  --status-idle-fg: #1a1208;
+  --status-no-signal: #6b7280;
+  --status-no-signal-fg: #ffffff;
+
+  --shopfloor-display-size: 56px;
+  --shopfloor-label-size: 20px;
+}

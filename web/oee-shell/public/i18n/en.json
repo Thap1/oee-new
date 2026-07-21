@@ -16,6 +16,14 @@
   "placeholder": {
     "comingLater": "This feature will be built in a later epic."
   },
+  "dashboard": {
+    "status": {
+      "Running": "Running",
+      "Stopped": "Stopped",
+      "Idle": "Idle",
+      "Fault": "Fault"
+    }
+  },
   "masterData": {
     "sites": "Sites",
     "lines": "Lines",
