@@ -69,7 +69,15 @@
     "performance": "Performance",
     "quality": "Quality",
     "oee": "OEE",
-    "qualityReject": "Phế phẩm"
+    "qualityReject": "Phế phẩm",
+    "filter": {
+      "label": "Bộ lọc",
+      "none": "Không lọc",
+      "site": "Site",
+      "line": "Line",
+      "machine": "Máy",
+      "selectTarget": "Chọn..."
+    }
   },
   "masterData": {
     "sites": "Site",

@@ -4,15 +4,16 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { DatePicker } from 'primeng/datepicker';
 import { SelectModule } from 'primeng/select';
 import { ScopeService } from '../../core/scope/scope.service';
-import { MasterDataService, ShiftScheduleDto } from '../master-data/master-data.service';
-import { OeeReportDto, OeeReportService, ReportPeriodType } from './oee-report.service';
+import { MachineDto, MasterDataService, ShiftScheduleDto } from '../master-data/master-data.service';
+import { OeeReportDto, OeeReportService, ReportFilterTargetType, ReportPeriodType } from './oee-report.service';
 
 /**
- * OEE report by Shift/Day/Week (Story 4.1, FR-016). Self-contained widget: own signals for
+ * OEE report by Shift/Day/Week (Story 4.1, FR-016), with an optional Site/Line/Machine filter
+ * within the caller's scope (Story 4.2, FR-017). Self-contained widget: own signals for
  * selection state, own service, `computed()` for derived display — same shape as
  * `LossPieChart`/`LossAnalyticsService` (Story 3.1) rather than a new pattern. The Shift picker
- * reuses `ScopeService.selectedSiteId` (the topbar's Site/Line selector) instead of adding a
- * second independent site selector.
+ * and the Site/Line filter options reuse `ScopeService` (the topbar's Site/Line selector) instead
+ * of adding independent selectors/refetches.
  */
 @Component({
   selector: 'app-reports-page',
@@ -45,6 +46,25 @@ import { OeeReportDto, OeeReportService, ReportPeriodType } from './oee-report.s
             (ngModelChange)="onShiftChange($event)"
             [placeholder]="'reports.selectShift' | translate"
             data-testid="reports-shift"
+          />
+        }
+        <p-select
+          [options]="filterTypeOptions()"
+          optionLabel="label"
+          optionValue="value"
+          [ngModel]="filterType()"
+          (ngModelChange)="onFilterTypeChange($event)"
+          data-testid="reports-filter-type"
+        />
+        @if (filterType(); as type) {
+          <p-select
+            [options]="filterTargetOptions()"
+            optionLabel="label"
+            optionValue="value"
+            [ngModel]="filterId()"
+            (ngModelChange)="onFilterIdChange($event)"
+            [placeholder]="'reports.filter.selectTarget' | translate"
+            data-testid="reports-filter-target"
           />
         }
       </div>
@@ -114,12 +134,17 @@ export class ReportsPage implements OnInit {
   private readonly referenceDateSignal = signal<Date>(new Date());
   private readonly shiftScheduleIdSignal = signal<string | null>(null);
   private readonly shiftsSignal = signal<ShiftScheduleDto[]>([]);
+  private readonly filterTypeSignal = signal<ReportFilterTargetType | null>(null);
+  private readonly filterIdSignal = signal<string | null>(null);
+  private readonly filterMachinesSignal = signal<MachineDto[]>([]);
   private readonly reportSignal = signal<OeeReportDto | null>(null);
   private readonly errorSignal = signal(false);
 
   readonly periodType = this.periodTypeSignal.asReadonly();
   readonly referenceDate = this.referenceDateSignal.asReadonly();
   readonly shiftScheduleId = this.shiftScheduleIdSignal.asReadonly();
+  readonly filterType = this.filterTypeSignal.asReadonly();
+  readonly filterId = this.filterIdSignal.asReadonly();
   readonly report = this.reportSignal.asReadonly();
   readonly error = this.errorSignal.asReadonly();
 
@@ -139,6 +164,15 @@ export class ReportsPage implements OnInit {
         void this.loadShiftsForSite(siteId);
       }
     });
+
+    // Same reasoning for the Machine-level filter's target options: reload whenever the topbar's
+    // selected Line changes while that filter level is active.
+    effect(() => {
+      const lineId = this.scope.selectedLineId();
+      if (lineId && untracked(this.filterTypeSignal) === 'Machine') {
+        void this.loadMachinesForLine(lineId);
+      }
+    });
   }
 
   ngOnInit(): void {
@@ -155,6 +189,28 @@ export class ReportsPage implements OnInit {
 
   shiftOptions() {
     return this.shiftsSignal().map((s) => ({ label: s.name, value: s.id }));
+  }
+
+  filterTypeOptions() {
+    return [
+      { label: this.translate.instant('reports.filter.none'), value: null },
+      { label: this.translate.instant('reports.filter.site'), value: 'Site' },
+      { label: this.translate.instant('reports.filter.line'), value: 'Line' },
+      { label: this.translate.instant('reports.filter.machine'), value: 'Machine' },
+    ];
+  }
+
+  filterTargetOptions() {
+    switch (this.filterTypeSignal()) {
+      case 'Site':
+        return this.scope.sites().map((s) => ({ label: s.name, value: s.id }));
+      case 'Line':
+        return this.scope.lines().map((l) => ({ label: l.name, value: l.id }));
+      case 'Machine':
+        return this.filterMachinesSignal().map((m) => ({ label: m.name, value: m.id }));
+      default:
+        return [];
+    }
   }
 
   async onPeriodTypeChange(periodType: ReportPeriodType): Promise<void> {
@@ -182,6 +238,29 @@ export class ReportsPage implements OnInit {
     await this.refetchReport();
   }
 
+  /** `null` (the "No filter" option) re-fetches the unfiltered report immediately — same default-scope report Story 4.1 built. */
+  async onFilterTypeChange(filterType: ReportFilterTargetType | null): Promise<void> {
+    this.filterTypeSignal.set(filterType);
+    this.filterIdSignal.set(null);
+
+    if (filterType === 'Machine') {
+      const lineId = this.scope.selectedLineId();
+      if (lineId) {
+        await this.loadMachinesForLine(lineId);
+      }
+      return;
+    }
+
+    if (filterType === null) {
+      await this.refetchReport();
+    }
+  }
+
+  async onFilterIdChange(filterId: string): Promise<void> {
+    this.filterIdSignal.set(filterId);
+    await this.refetchReport();
+  }
+
   percent(ratio: number): string {
     return (ratio * 100).toFixed(1);
   }
@@ -194,15 +273,32 @@ export class ReportsPage implements OnInit {
     }
   }
 
+  private async loadMachinesForLine(lineId: string): Promise<void> {
+    try {
+      this.filterMachinesSignal.set(await this.masterData.listMachines(lineId));
+    } catch {
+      this.errorSignal.set(true);
+    }
+  }
+
   private async refetchReport(): Promise<void> {
     if (this.periodTypeSignal() === 'Shift' && !this.shiftScheduleIdSignal()) {
+      return;
+    }
+    if (this.filterTypeSignal() && !this.filterIdSignal()) {
       return;
     }
 
     this.errorSignal.set(false);
     try {
       this.reportSignal.set(
-        await this.oeeReport.getReport(this.periodTypeSignal(), this.referenceDateSignal(), this.shiftScheduleIdSignal()),
+        await this.oeeReport.getReport(
+          this.periodTypeSignal(),
+          this.referenceDateSignal(),
+          this.shiftScheduleIdSignal(),
+          this.filterTypeSignal(),
+          this.filterIdSignal(),
+        ),
       );
     } catch {
       this.reportSignal.set(null);

@@ -3,6 +3,7 @@ import { Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 export type ReportPeriodType = 'Shift' | 'Day' | 'Week';
+export type ReportFilterTargetType = 'Site' | 'Line' | 'Machine';
 
 export interface OeeReportDto {
   periodType: ReportPeriodType;
@@ -32,10 +33,20 @@ function toDateParam(date: Date): string {
 export class OeeReportService {
   constructor(private readonly http: HttpClient) {}
 
-  getReport(periodType: ReportPeriodType, referenceDate: Date, shiftScheduleId?: string | null): Promise<OeeReportDto> {
+  getReport(
+    periodType: ReportPeriodType,
+    referenceDate: Date,
+    shiftScheduleId?: string | null,
+    filterType?: ReportFilterTargetType | null,
+    filterId?: string | null,
+  ): Promise<OeeReportDto> {
     const params = new URLSearchParams({ periodType, referenceDate: toDateParam(referenceDate) });
     if (shiftScheduleId) {
       params.set('shiftScheduleId', shiftScheduleId);
+    }
+    if (filterType && filterId) {
+      params.set('filterType', filterType);
+      params.set('filterId', filterId);
     }
     return firstValueFrom(this.http.get<OeeReportDto>(`/api/reports/oee?${params.toString()}`));
   }

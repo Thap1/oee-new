@@ -69,7 +69,15 @@
     "performance": "Performance",
     "quality": "Quality",
     "oee": "OEE",
-    "qualityReject": "Quality rejects"
+    "qualityReject": "Quality rejects",
+    "filter": {
+      "label": "Filter",
+      "none": "No filter",
+      "site": "Site",
+      "line": "Line",
+      "machine": "Machine",
+      "selectTarget": "Select..."
+    }
   },
   "masterData": {
     "sites": "Sites",
