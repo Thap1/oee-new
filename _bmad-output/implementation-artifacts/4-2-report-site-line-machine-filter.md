@@ -1,6 +1,10 @@
+---
+baseline_commit: 9ed4738da848404782bd3f29958b1547190f72a8
+---
+
 # Story 4.2: Lọc báo cáo theo site/line/máy
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

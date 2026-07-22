@@ -105,4 +105,50 @@ public class ReportsEndpointsTests(MasterDataApiFactory factory) : IClassFixture
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task GetOeeReport_SiteFilterOutsideCallerScope_ReturnsForbidden()
+    {
+        var adminClient = AdminClient();
+        var siteA = await CreateSiteAsync(adminClient);
+        var lineA = await CreateLineAsync(adminClient, siteA.Id);
+        var siteB = await CreateSiteAsync(adminClient);
+
+        var scopedClient = factory.CreateClient();
+        scopedClient.DefaultRequestHeaders.Authorization =
+            new("Bearer", factory.CreateTokenFor("Manager", [siteA.Id], [lineA.Id]));
+
+        var response = await scopedClient.GetAsync(
+            $"/api/reports/oee?periodType=Day&referenceDate=2026-07-20&filterType=Site&filterId={siteB.Id}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ApiErrorResponse>();
+        Assert.Equal("FORBIDDEN", error!.Code);
+    }
+
+    [Fact]
+    public async Task GetOeeReport_MachineFilter_ReturnsReportCountingOnlyThatMachine()
+    {
+        var client = AdminClient();
+        var site = await CreateSiteAsync(client);
+        var line = await CreateLineAsync(client, site.Id);
+        var machineA = await CreateMachineAsync(client, line.Id);
+        await CreateMachineAsync(client, line.Id);
+
+        var response = await client.GetFromJsonAsync<OeeReportResponse>(
+            $"/api/reports/oee?periodType=Day&referenceDate=2026-07-20&filterType=Machine&filterId={machineA.Id}");
+
+        Assert.NotNull(response);
+        Assert.Equal("Day", response!.PeriodType);
+    }
+
+    [Fact]
+    public async Task GetOeeReport_FilterTypeWithoutFilterId_ReturnsBadRequest()
+    {
+        var client = AdminClient();
+
+        var response = await client.GetAsync("/api/reports/oee?periodType=Day&referenceDate=2026-07-20&filterType=Site");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

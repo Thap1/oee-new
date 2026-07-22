@@ -82,6 +82,13 @@ builder.Services.AddScoped<MachineStatusQueryUseCase>();
 builder.Services.AddScoped<RecordDowntimeReasonUseCase>();
 builder.Services.AddScoped<RecordQualityRejectUseCase>();
 
+// Opt-in (Production:SimulateSignal): fake a live PLC/gateway feed for demo/deploy environments so
+// seeded machines don't all drift into no-signal a minute after boot — see db/init/02_seed.sql.
+if (builder.Configuration.GetValue<bool>("Production:SimulateSignal"))
+{
+    builder.Services.AddHostedService<DemoSignalSimulatorHostedService>();
+}
+
 // Loss pie chart (Story 3.1 — FR-019/020/021): read-only aggregation over the same Production tables.
 builder.Services.AddScoped<LossBreakdownQueryUseCase>();
 builder.Services.AddScoped<LossAreaOptionsQueryUseCase>();

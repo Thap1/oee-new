@@ -7,7 +7,8 @@ using OeeNew.Domain.MasterData;
 namespace OeeNew.Application.Reports;
 
 /// <summary>
-/// Aggregated OEE report over a Shift/Day/Week period (Story 4.1, FR-016). Computes a
+/// Aggregated OEE report over a Shift/Day/Week period (Story 4.1, FR-016), optionally narrowed to a
+/// Site/Line/Machine filter within the caller's scope (Story 4.2, FR-017). Computes a
 /// <b>time-based-loss proxy</b>, not textbook count-based OEE — there is no ProductionCount/ideal-cycle-time
 /// entity anywhere in the codebase to compute a true Performance/Quality ratio from, so this reuses exactly
 /// the same "seconds lost per LossCategory" data Epic 3's <see cref="Analytics.LossBreakdownQueryUseCase"/>
@@ -23,6 +24,7 @@ namespace OeeNew.Application.Reports;
 /// blocks — Story 4.3's top-downtime-reason report calls back into this same class rather than duplicating them.
 /// </summary>
 public sealed class OeeReportQueryUseCase(
+    ISiteRepository sites,
     IMachineRepository machines,
     ILineRepository lines,
     IShiftScheduleRepository shiftSchedules,
@@ -30,10 +32,22 @@ public sealed class OeeReportQueryUseCase(
     IQualityRejectRepository qualityRejects)
 {
     public async Task<OeeReportResult> GetReportAsync(
-        CallerScope scope, ReportPeriodType periodType, DateOnly referenceDate, Guid? shiftScheduleId, CancellationToken cancellationToken = default)
+        CallerScope scope, ReportPeriodType periodType, DateOnly referenceDate, Guid? shiftScheduleId,
+        ReportFilterTargetType? filterType = null, Guid? filterId = null, CancellationToken cancellationToken = default)
     {
         var (start, end, plannedSeconds) = await ResolvePeriodAsync(scope, periodType, referenceDate, shiftScheduleId, cancellationToken);
         var machineIds = await ResolveMachinesAsync(scope, periodType, referenceDate, shiftScheduleId, cancellationToken);
+
+        if (filterType is { } type)
+        {
+            // Checked against CallerScope (not the narrower period-implied set) — a filter that's
+            // legitimately scoped but disjoint from the period (e.g. a Site B filter on a Site A shift)
+            // is a normal empty result, not a forbidden request. Only an out-of-CallerScope filter is
+            // the AC #3 rejection (Story 4.2 Dev Notes: these are two independent checks, don't merge them).
+            var filterMachineIds = await ResolveFilterMachinesAsync(scope, type, filterId!.Value, cancellationToken);
+            var filterSet = filterMachineIds.ToHashSet();
+            machineIds = machineIds.Where(filterSet.Contains).ToList();
+        }
 
         if (machineIds.Count == 0)
         {
@@ -112,11 +126,11 @@ public sealed class OeeReportQueryUseCase(
     }
 
     /// <summary>
-    /// Resolves every Machine the report should aggregate over. Day/Week fall back to the caller's full
-    /// scope (Story 4.2 later narrows this with explicit site/line/machine filters). Shift resolves through
-    /// the picked <see cref="ShiftSchedule"/>'s Site/Line — treated as spoofable client input and checked
-    /// against <see cref="CallerScope"/>, the same reasoning
-    /// <see cref="Analytics.LossBreakdownQueryUseCase"/>'s ResolveEquipmentAsync/ResolveAreaAsync use.
+    /// Resolves every Machine the report should aggregate over before any Story 4.2 filter is applied.
+    /// Day/Week fall back to the caller's full scope; Shift resolves through the picked
+    /// <see cref="ShiftSchedule"/>'s Site/Line — treated as spoofable client input and checked against
+    /// <see cref="CallerScope"/>, the same reasoning <see cref="Analytics.LossBreakdownQueryUseCase"/>'s
+    /// ResolveEquipmentAsync/ResolveAreaAsync use.
     /// </summary>
     internal async Task<IReadOnlyList<Guid>> ResolveMachinesAsync(
         CallerScope scope, ReportPeriodType periodType, DateOnly referenceDate, Guid? shiftScheduleId, CancellationToken cancellationToken)
@@ -145,7 +159,68 @@ public sealed class OeeReportQueryUseCase(
             return lineMachines.Select(m => m.Id).ToList();
         }
 
-        var siteLines = await lines.ListBySiteAsync(shift.SiteId, cancellationToken);
+        return await ResolveSiteMachinesAsync(scope, shift.SiteId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Resolves a Story 4.2 Site/Line/Machine report filter against <see cref="CallerScope"/> — the same
+    /// spoofable-client-input reasoning as <see cref="Analytics.LossBreakdownQueryUseCase"/>'s
+    /// ResolveEquipmentAsync/ResolveAreaAsync, extended with a third (Site) level FR-017 requires that
+    /// Epic 3's two-level Equipment/Area filter never needed.
+    /// </summary>
+    internal async Task<IReadOnlyList<Guid>> ResolveFilterMachinesAsync(
+        CallerScope scope, ReportFilterTargetType filterType, Guid filterId, CancellationToken cancellationToken)
+    {
+        switch (filterType)
+        {
+            case ReportFilterTargetType.Machine:
+            {
+                var machine = await machines.GetAsync(filterId, cancellationToken)
+                    ?? throw new MasterDataNotFoundException("Machine", filterId);
+                var line = await lines.GetAsync(machine.LineId, cancellationToken);
+                if (line is null || !scope.AllowsSite(line.SiteId) || !scope.AllowsLine(machine.LineId))
+                {
+                    throw new MasterDataForbiddenException();
+                }
+
+                return [machine.Id];
+            }
+            case ReportFilterTargetType.Line:
+            {
+                var line = await lines.GetAsync(filterId, cancellationToken)
+                    ?? throw new MasterDataNotFoundException("Line", filterId);
+                if (!scope.AllowsSite(line.SiteId) || !scope.AllowsLine(filterId))
+                {
+                    throw new MasterDataForbiddenException();
+                }
+
+                var lineMachines = await machines.ListByLineAsync(filterId, cancellationToken);
+                return lineMachines.Select(m => m.Id).ToList();
+            }
+            case ReportFilterTargetType.Site:
+            {
+                var site = await sites.GetAsync(filterId, cancellationToken)
+                    ?? throw new MasterDataNotFoundException("Site", filterId);
+                if (!scope.AllowsSite(site.Id))
+                {
+                    throw new MasterDataForbiddenException();
+                }
+
+                return await ResolveSiteMachinesAsync(scope, site.Id, cancellationToken);
+            }
+            default:
+                throw new ArgumentOutOfRangeException(nameof(filterType), filterType, null);
+        }
+    }
+
+    /// <summary>
+    /// Every Machine under every caller-permitted Line of a Site — shared by the Shift-period's
+    /// site-wide-shift resolution (Story 4.1) and the Site-level report filter (Story 4.2), instead of
+    /// duplicating the composition in two places.
+    /// </summary>
+    private async Task<IReadOnlyList<Guid>> ResolveSiteMachinesAsync(CallerScope scope, Guid siteId, CancellationToken cancellationToken)
+    {
+        var siteLines = await lines.ListBySiteAsync(siteId, cancellationToken);
         var allowedLines = siteLines.Where(l => scope.AllowsLine(l.Id)).ToList();
 
         var result = new List<Guid>();

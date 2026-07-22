@@ -11,4 +11,8 @@ public sealed class ProductionOptions
     public const string SectionName = "Production";
 
     public int NoSignalThresholdSeconds { get; set; } = 60;
+
+    /// <summary>Opt-in: runs <see cref="DemoSignalSimulatorHostedService"/> to fake a live data feed
+    /// when no real PLC/gateway is connected (demo/deploy environments only).</summary>
+    public bool SimulateSignal { get; set; }
 }

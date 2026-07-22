@@ -19,6 +19,11 @@ RUN dotnet publish src/OeeNew.Api/OeeNew.Api.csproj -c Release -o /app/publish -
 
 # --- Stage 3: runtime image ---
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+# Npgsql dlopens libgssapi_krb5 for GSS encryption negotiation with Postgres; the slim base
+# image doesn't ship it, which crashes every DB connection attempt at runtime.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/publish .
 COPY --from=web /src/web/oee-shell/dist/oee-shell/browser ./wwwroot

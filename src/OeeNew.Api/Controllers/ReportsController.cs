@@ -27,7 +27,8 @@ public sealed class ReportsController(OeeReportQueryUseCase reportUseCase) : Con
 {
     [HttpGet("api/reports/oee")]
     public async Task<ActionResult<OeeReportResponse>> GetOeeReport(
-        [FromQuery] ReportPeriodType periodType, [FromQuery] DateOnly referenceDate, [FromQuery] Guid? shiftScheduleId, CancellationToken cancellationToken)
+        [FromQuery] ReportPeriodType periodType, [FromQuery] DateOnly referenceDate, [FromQuery] Guid? shiftScheduleId,
+        [FromQuery] ReportFilterTargetType? filterType, [FromQuery] Guid? filterId, CancellationToken cancellationToken)
     {
         if ((periodType == ReportPeriodType.Shift) != (shiftScheduleId is not null))
         {
@@ -38,7 +39,17 @@ public sealed class ReportsController(OeeReportQueryUseCase reportUseCase) : Con
             });
         }
 
-        var result = await reportUseCase.GetReportAsync(User.GetCallerScope(), periodType, referenceDate, shiftScheduleId, cancellationToken);
+        if (filterType.HasValue != filterId.HasValue)
+        {
+            return BadRequest(new ApiErrorResponse
+            {
+                Code = "VALIDATION_ERROR",
+                Message = "filterType and filterId must be provided together.",
+            });
+        }
+
+        var result = await reportUseCase.GetReportAsync(
+            User.GetCallerScope(), periodType, referenceDate, shiftScheduleId, filterType, filterId, cancellationToken);
         return Ok(new OeeReportResponse(
             result.PeriodType.ToString(),
             result.PeriodStart,
