@@ -39,6 +39,38 @@
       "submit": "Lưu"
     }
   },
+  "lossChart": {
+    "title": "Phân bổ tổn thất",
+    "byEquipment": "Theo Equipment",
+    "byArea": "Theo Production Area",
+    "selectTarget": "Chọn...",
+    "availability": "Availability",
+    "performance": "Performance",
+    "quality": "Quality",
+    "emptyState": "Chưa có dữ liệu dừng máy cho lựa chọn này.",
+    "loadError": "Không tải được dữ liệu tổn thất. Vui lòng thử lại.",
+    "selectDate": "Chọn ngày...",
+    "qualityRejectCaption": "Phế phẩm: {{quantity}}",
+    "unattributedCaption": "Dừng máy chưa gán lý do: {{seconds}}s",
+    "reasonBreakdown": {
+      "title": "{{category}} — theo mã lý do",
+      "empty": "Không có mã lý do nào góp phần vào lát này."
+    }
+  },
+  "reports": {
+    "title": "Báo cáo OEE",
+    "periodType": {
+      "shift": "Ca",
+      "day": "Ngày",
+      "week": "Tuần"
+    },
+    "selectShift": "Chọn một ca...",
+    "availability": "Availability",
+    "performance": "Performance",
+    "quality": "Quality",
+    "oee": "OEE",
+    "qualityReject": "Phế phẩm"
+  },
   "masterData": {
     "sites": "Site",
     "lines": "Line",

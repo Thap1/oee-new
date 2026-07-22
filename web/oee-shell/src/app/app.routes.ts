@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
+import { roleGuard } from './core/auth/role.guard';
 import { Shell } from './core/layout/shell';
 import { Login } from './pages/login/login';
 import { DashboardPage } from './pages/dashboard/dashboard-page';

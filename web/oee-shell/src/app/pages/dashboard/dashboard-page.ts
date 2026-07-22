@@ -1,8 +1,9 @@
-import { Component, OnDestroy, OnInit, effect, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, effect, signal } from '@angular/core';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MachineStatusChangedEvent, MachineStatusHubService } from '../../core/realtime/machine-status-hub.service';
 import { MasterDataService, ReasonCodeDto } from '../master-data/master-data.service';
 import { DashboardService, MachineStatusDto } from './dashboard.service';
+import { LossPieChart } from './loss-pie-chart';
 import { MachineStatusCard } from './machine-status-card';
 import { ReasonCodePicker } from './reason-code-picker';
 
@@ -22,7 +23,7 @@ const PULSE_DURATION_MS = 700;
 @Component({
   selector: 'app-dashboard-page',
   standalone: true,
-  imports: [TranslatePipe, MachineStatusCard, ReasonCodePicker],
+  imports: [TranslatePipe, MachineStatusCard, ReasonCodePicker, LossPieChart],
   template: `
     <h2>{{ 'nav.dashboard' | translate }}</h2>
     @if (loadError()) {
@@ -52,6 +53,7 @@ const PULSE_DURATION_MS = 700;
         }
       </div>
     }
+    <app-loss-pie-chart [equipmentOptions]="equipmentOptions()" />
     <app-reason-code-picker
       [open]="pickerOpen()"
       [reasonCodes]="pickerReasonCodes()"
@@ -106,6 +108,10 @@ export class DashboardPage implements OnInit, OnDestroy {
   readonly loadError = this.loadErrorSignal.asReadonly();
   readonly pickerOpen = this.pickerOpenSignal.asReadonly();
   readonly pickerReasonCodes = this.pickerReasonCodesSignal.asReadonly();
+  /** Story 3.1's Equipment dropdown source — reuses this page's already-scoped machine list (Story 2.2) instead of a redundant endpoint. */
+  readonly equipmentOptions = computed(() =>
+    this.machinesSignal().map((m) => ({ machineId: m.machineId, machineName: m.machineName })),
+  );
 
   constructor(
     private readonly dashboardService: DashboardService,

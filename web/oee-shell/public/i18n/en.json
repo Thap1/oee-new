@@ -39,6 +39,38 @@
       "submit": "Save"
     }
   },
+  "lossChart": {
+    "title": "Loss Breakdown",
+    "byEquipment": "By Equipment",
+    "byArea": "By Production Area",
+    "selectTarget": "Select...",
+    "availability": "Availability",
+    "performance": "Performance",
+    "quality": "Quality",
+    "emptyState": "No downtime recorded for this selection yet.",
+    "loadError": "Could not load the loss breakdown. Please try again.",
+    "selectDate": "Select a date...",
+    "qualityRejectCaption": "Quality rejects: {{quantity}}",
+    "unattributedCaption": "Unattributed downtime: {{seconds}}s",
+    "reasonBreakdown": {
+      "title": "{{category}} — by reason",
+      "empty": "No reason codes contributed to this slice."
+    }
+  },
+  "reports": {
+    "title": "OEE Report",
+    "periodType": {
+      "shift": "Shift",
+      "day": "Day",
+      "week": "Week"
+    },
+    "selectShift": "Select a shift...",
+    "availability": "Availability",
+    "performance": "Performance",
+    "quality": "Quality",
+    "oee": "OEE",
+    "qualityReject": "Quality rejects"
+  },
   "masterData": {
     "sites": "Sites",
     "lines": "Lines",
