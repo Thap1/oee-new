@@ -1,14 +1,22 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using OeeNew.Api.Controllers;
 using OeeNew.Api.Errors;
 using OeeNew.Api.Tests.MasterData;
+using OeeNew.Domain.MasterData;
 using Xunit;
 
 namespace OeeNew.Api.Tests.Reports;
 
 public class ReportsEndpointsTests(MasterDataApiFactory factory) : IClassFixture<MasterDataApiFactory>
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
+
     private HttpClient AdminClient()
     {
         var client = factory.CreateClient();
@@ -150,5 +158,62 @@ public class ReportsEndpointsTests(MasterDataApiFactory factory) : IClassFixture
         var response = await client.GetAsync("/api/reports/oee?periodType=Day&referenceDate=2026-07-20&filterType=Site");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetOeeReport_TwoReasonedDowntimeEvents_ReturnsTheHigherOneAsTopDowntimeReason_InOneResponse()
+    {
+        var client = AdminClient();
+        var site = await CreateSiteAsync(client);
+        var line = await CreateLineAsync(client, site.Id);
+        var machine = await CreateMachineAsync(client, line.Id);
+        var smallReason = (await (await client.PostAsJsonAsync($"/api/master-data/sites/{site.Id}/reason-codes",
+            new CreateReasonCodeRequest($"Small {Guid.NewGuid():N}", LossCategory.AvailabilityLoss)))
+            .Content.ReadFromJsonAsync<ReasonCodeResponse>(JsonOptions))!;
+        var bigReason = (await (await client.PostAsJsonAsync($"/api/master-data/sites/{site.Id}/reason-codes",
+            new CreateReasonCodeRequest($"Big {Guid.NewGuid():N}", LossCategory.PerformanceLoss)))
+            .Content.ReadFromJsonAsync<ReasonCodeResponse>(JsonOptions))!;
+
+        var t0 = DateTimeOffset.UtcNow;
+        // First closed event, attributed to the small reason (20s).
+        await client.PostAsJsonAsync("/api/production/readings", new { machineId = machine.Id, timestamp = t0, counter = 1, status = "Stopped" });
+        await client.PostAsJsonAsync($"/api/production/machines/{machine.Id}/downtime-reason", new { reasonCodeId = smallReason.Id });
+        await client.PostAsJsonAsync("/api/production/readings", new { machineId = machine.Id, timestamp = t0.AddSeconds(20), counter = 2, status = "Running" });
+        // Second closed event, attributed to the big reason (40s) — should win.
+        await client.PostAsJsonAsync("/api/production/readings", new { machineId = machine.Id, timestamp = t0.AddSeconds(30), counter = 2, status = "Stopped" });
+        await client.PostAsJsonAsync($"/api/production/machines/{machine.Id}/downtime-reason", new { reasonCodeId = bigReason.Id });
+        await client.PostAsJsonAsync("/api/production/readings", new { machineId = machine.Id, timestamp = t0.AddSeconds(70), counter = 3, status = "Running" });
+
+        // Scoped to just this test's Site/Line — Admin has global scope, and Day aggregates over every
+        // machine in the shared test database, so an unscoped client here could pick up another test's
+        // same-day downtime and flake on exactly which reason ranks first.
+        var scopedClient = factory.CreateClient();
+        scopedClient.DefaultRequestHeaders.Authorization =
+            new("Bearer", factory.CreateTokenFor("Manager", [site.Id], [line.Id]));
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var response = await scopedClient.GetFromJsonAsync<OeeReportResponse>(
+            $"/api/reports/oee?periodType=Day&referenceDate={today:yyyy-MM-dd}");
+
+        Assert.NotNull(response);
+        Assert.Equal(bigReason.Id, response!.TopDowntimeReasonCodeId);
+        Assert.True(response.TopDowntimeReasonSeconds >= 40);
+    }
+
+    [Fact]
+    public async Task GetOeeReport_NoDowntimeInPeriod_TopDowntimeReasonFieldsAllNull()
+    {
+        var client = AdminClient();
+        var site = await CreateSiteAsync(client);
+        var line = await CreateLineAsync(client, site.Id);
+        await CreateMachineAsync(client, line.Id);
+
+        var response = await client.GetFromJsonAsync<OeeReportResponse>(
+            "/api/reports/oee?periodType=Day&referenceDate=2026-07-20");
+
+        Assert.NotNull(response);
+        Assert.Null(response!.TopDowntimeReasonCodeId);
+        Assert.Null(response.TopDowntimeReasonName);
+        Assert.Null(response.TopDowntimeReasonSeconds);
     }
 }

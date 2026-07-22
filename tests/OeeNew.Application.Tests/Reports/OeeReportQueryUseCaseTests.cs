@@ -12,8 +12,9 @@ public class OeeReportQueryUseCaseTests
 {
     private static OeeReportQueryUseCase BuildUseCase(
         FakeMachineRepository machines, FakeLineRepository lines, FakeShiftScheduleRepository shifts,
-        FakeDowntimeEventRepository downtimeEvents, FakeQualityRejectRepository qualityRejects, FakeSiteRepository? sites = null) =>
-        new(sites ?? new FakeSiteRepository(), machines, lines, shifts, downtimeEvents, qualityRejects);
+        FakeDowntimeEventRepository downtimeEvents, FakeQualityRejectRepository qualityRejects,
+        FakeSiteRepository? sites = null, FakeReasonCodeRepository? reasonCodes = null) =>
+        new(sites ?? new FakeSiteRepository(), machines, lines, shifts, downtimeEvents, qualityRejects, reasonCodes ?? new FakeReasonCodeRepository());
 
     [Fact]
     public async Task GetReportAsync_Day_UsesExactUtcCalendarDayBoundaries()
@@ -262,6 +263,126 @@ public class OeeReportQueryUseCaseTests
 
         Assert.Equal(0, result.AvailabilityLossSeconds);
         Assert.Equal(0, result.OeePercent);
+    }
+
+    [Fact]
+    public async Task GetReportAsync_TopDowntimeReason_TieBreaksByNameOrdinal_StableAcrossRepeatedCalls()
+    {
+        var machines = new FakeMachineRepository();
+        var lines = new FakeLineRepository();
+        var shifts = new FakeShiftScheduleRepository();
+        var downtimeEvents = new FakeDowntimeEventRepository();
+        var qualityRejects = new FakeQualityRejectRepository();
+        var reasonCodes = new FakeReasonCodeRepository();
+        var siteId = Guid.NewGuid();
+        var lineId = lines.Seed("Line A", siteId);
+        var machineId = machines.Seed("Machine A", lineId, siteId);
+        var reasonZ = reasonCodes.Seed(siteId, "Zeta", LossCategory.AvailabilityLoss);
+        var reasonA = reasonCodes.Seed(siteId, "Alpha", LossCategory.AvailabilityLoss);
+
+        var referenceDate = new DateOnly(2026, 7, 20);
+        downtimeEvents.SeedClosed(machineId, reasonZ, LossCategory.AvailabilityLoss, 50, new DateTimeOffset(2026, 7, 20, 1, 0, 0, TimeSpan.Zero));
+        downtimeEvents.SeedClosed(machineId, reasonA, LossCategory.AvailabilityLoss, 50, new DateTimeOffset(2026, 7, 20, 2, 0, 0, TimeSpan.Zero));
+
+        var useCase = BuildUseCase(machines, lines, shifts, downtimeEvents, qualityRejects, reasonCodes: reasonCodes);
+        var result1 = await useCase.GetReportAsync(CallerScope.Global, ReportPeriodType.Day, referenceDate, shiftScheduleId: null);
+        var result2 = await useCase.GetReportAsync(CallerScope.Global, ReportPeriodType.Day, referenceDate, shiftScheduleId: null);
+
+        Assert.Equal(reasonA, result1.TopDowntimeReasonCodeId);
+        Assert.Equal("Alpha", result1.TopDowntimeReasonName);
+        Assert.Equal(50, result1.TopDowntimeReasonSeconds);
+        Assert.Equal(result1.TopDowntimeReasonCodeId, result2.TopDowntimeReasonCodeId);
+    }
+
+    [Fact]
+    public async Task GetReportAsync_TopDowntimeReason_NotFilteredByLossCategory()
+    {
+        var machines = new FakeMachineRepository();
+        var lines = new FakeLineRepository();
+        var shifts = new FakeShiftScheduleRepository();
+        var downtimeEvents = new FakeDowntimeEventRepository();
+        var qualityRejects = new FakeQualityRejectRepository();
+        var reasonCodes = new FakeReasonCodeRepository();
+        var siteId = Guid.NewGuid();
+        var lineId = lines.Seed("Line A", siteId);
+        var machineId = machines.Seed("Machine A", lineId, siteId);
+        var performanceReason = reasonCodes.Seed(siteId, "Changeover", LossCategory.PerformanceLoss);
+        var availabilityReason = reasonCodes.Seed(siteId, "Breakdown", LossCategory.AvailabilityLoss);
+
+        var referenceDate = new DateOnly(2026, 7, 20);
+        downtimeEvents.SeedClosed(machineId, performanceReason, LossCategory.PerformanceLoss, 200, new DateTimeOffset(2026, 7, 20, 1, 0, 0, TimeSpan.Zero));
+        downtimeEvents.SeedClosed(machineId, availabilityReason, LossCategory.AvailabilityLoss, 50, new DateTimeOffset(2026, 7, 20, 2, 0, 0, TimeSpan.Zero));
+
+        var useCase = BuildUseCase(machines, lines, shifts, downtimeEvents, qualityRejects, reasonCodes: reasonCodes);
+        var result = await useCase.GetReportAsync(CallerScope.Global, ReportPeriodType.Day, referenceDate, shiftScheduleId: null);
+
+        Assert.Equal(performanceReason, result.TopDowntimeReasonCodeId);
+        Assert.Equal(200, result.TopDowntimeReasonSeconds);
+    }
+
+    [Fact]
+    public async Task GetReportAsync_NoClosedEvents_TopDowntimeReasonFieldsAllNull()
+    {
+        var machines = new FakeMachineRepository();
+        var lines = new FakeLineRepository();
+        var shifts = new FakeShiftScheduleRepository();
+        var downtimeEvents = new FakeDowntimeEventRepository();
+        var qualityRejects = new FakeQualityRejectRepository();
+        var siteId = Guid.NewGuid();
+        var lineId = lines.Seed("Line A", siteId);
+        machines.Seed("Machine A", lineId, siteId);
+
+        var useCase = BuildUseCase(machines, lines, shifts, downtimeEvents, qualityRejects);
+        var result = await useCase.GetReportAsync(CallerScope.Global, ReportPeriodType.Day, new DateOnly(2026, 7, 20), shiftScheduleId: null);
+
+        Assert.Null(result.TopDowntimeReasonCodeId);
+        Assert.Null(result.TopDowntimeReasonName);
+        Assert.Null(result.TopDowntimeReasonSeconds);
+    }
+
+    [Fact]
+    public async Task GetReportAsync_OnlyUnattributedEvents_TopDowntimeReasonFieldsAllNull()
+    {
+        var machines = new FakeMachineRepository();
+        var lines = new FakeLineRepository();
+        var shifts = new FakeShiftScheduleRepository();
+        var downtimeEvents = new FakeDowntimeEventRepository();
+        var qualityRejects = new FakeQualityRejectRepository();
+        var siteId = Guid.NewGuid();
+        var lineId = lines.Seed("Line A", siteId);
+        var machineId = machines.Seed("Machine A", lineId, siteId);
+        downtimeEvents.SeedClosed(machineId, lossCategory: null, durationSeconds: 300, new DateTimeOffset(2026, 7, 20, 1, 0, 0, TimeSpan.Zero));
+
+        var useCase = BuildUseCase(machines, lines, shifts, downtimeEvents, qualityRejects);
+        var result = await useCase.GetReportAsync(CallerScope.Global, ReportPeriodType.Day, new DateOnly(2026, 7, 20), shiftScheduleId: null);
+
+        Assert.Null(result.TopDowntimeReasonCodeId);
+        Assert.Null(result.TopDowntimeReasonName);
+        Assert.Null(result.TopDowntimeReasonSeconds);
+    }
+
+    [Fact]
+    public async Task GetReportAsync_TopDowntimeReason_DoesNotPerturbExistingPercentages()
+    {
+        var machines = new FakeMachineRepository();
+        var lines = new FakeLineRepository();
+        var shifts = new FakeShiftScheduleRepository();
+        var downtimeEvents = new FakeDowntimeEventRepository();
+        var qualityRejects = new FakeQualityRejectRepository();
+        var reasonCodes = new FakeReasonCodeRepository();
+        var siteId = Guid.NewGuid();
+        var lineId = lines.Seed("Line A", siteId);
+        var machineId = machines.Seed("Machine A", lineId, siteId);
+        var reason = reasonCodes.Seed(siteId, "Breakdown", LossCategory.AvailabilityLoss);
+        downtimeEvents.SeedClosed(machineId, reason, LossCategory.AvailabilityLoss, 3600, new DateTimeOffset(2026, 7, 20, 1, 0, 0, TimeSpan.Zero));
+
+        var useCase = BuildUseCase(machines, lines, shifts, downtimeEvents, qualityRejects, reasonCodes: reasonCodes);
+        var result = await useCase.GetReportAsync(CallerScope.Global, ReportPeriodType.Day, new DateOnly(2026, 7, 20), shiftScheduleId: null);
+
+        Assert.Equal(reason, result.TopDowntimeReasonCodeId);
+        Assert.Equal(3600, result.TopDowntimeReasonSeconds);
+        Assert.Equal(3600, result.AvailabilityLossSeconds);
+        Assert.True(result.AvailabilityPercent < 1.0 && result.AvailabilityPercent > 0.9);
     }
 
     [Fact]

@@ -16,4 +16,7 @@ public sealed record OeeReportResult(
     long PerformanceLossSeconds,
     long QualityLossSeconds,
     long UnattributedSeconds,
-    int QualityRejectQuantity);
+    int QualityRejectQuantity,
+    Guid? TopDowntimeReasonCodeId = null,
+    string? TopDowntimeReasonName = null,
+    long? TopDowntimeReasonSeconds = null);

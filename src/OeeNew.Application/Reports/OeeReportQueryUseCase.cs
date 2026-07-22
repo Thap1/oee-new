@@ -29,7 +29,8 @@ public sealed class OeeReportQueryUseCase(
     ILineRepository lines,
     IShiftScheduleRepository shiftSchedules,
     IDowntimeEventRepository downtimeEvents,
-    IQualityRejectRepository qualityRejects)
+    IQualityRejectRepository qualityRejects,
+    IReasonCodeRepository reasonCodes)
 {
     public async Task<OeeReportResult> GetReportAsync(
         CallerScope scope, ReportPeriodType periodType, DateOnly referenceDate, Guid? shiftScheduleId,
@@ -71,10 +72,44 @@ public sealed class OeeReportQueryUseCase(
         var qualityPercent = RatioOrZero(afterQuality, afterPerformance);
         var oeePercent = availabilityPercent * performancePercent * qualityPercent;
 
+        var topReason = await ResolveTopDowntimeReasonAsync(slices, cancellationToken);
+
         return new OeeReportResult(
             periodType, start, end,
             availabilityPercent, performancePercent, qualityPercent, oeePercent,
-            availabilityLoss, performanceLoss, qualityLoss, unattributed, rejectQuantity);
+            availabilityLoss, performanceLoss, qualityLoss, unattributed, rejectQuantity,
+            topReason?.Id, topReason?.Name, topReason?.Seconds);
+    }
+
+    /// <summary>
+    /// The single downtime reason with the most total seconds across the whole period (Story 4.3,
+    /// FR-018) — grouped across all three <see cref="LossCategory"/> values together, unlike
+    /// <see cref="Analytics.LossBreakdownQueryUseCase.GetReasonBreakdownAsync"/>'s single-category
+    /// drill-down. Ties break by name (ordinal, locale-independent) for view-to-view stability (AC #2).
+    /// <c>null</c> when no attributed downtime exists in the period (AC #3).
+    /// </summary>
+    private async Task<(Guid Id, string Name, long Seconds)?> ResolveTopDowntimeReasonAsync(
+        IReadOnlyList<ClosedDowntimeSlice> slices, CancellationToken cancellationToken)
+    {
+        var totalsByReasonCodeId = slices
+            .Where(s => s.ReasonCodeId is not null)
+            .GroupBy(s => s.ReasonCodeId!.Value)
+            .ToDictionary(g => g.Key, g => g.Sum(s => s.DurationSeconds));
+
+        if (totalsByReasonCodeId.Count == 0)
+        {
+            return null;
+        }
+
+        var matchingReasonCodes = await reasonCodes.ListByIdsAsync(totalsByReasonCodeId.Keys.ToList(), cancellationToken);
+
+        var ranked = matchingReasonCodes
+            .Select(r => (r.Id, r.Name, Seconds: totalsByReasonCodeId[r.Id]))
+            .OrderByDescending(t => t.Seconds)
+            .ThenBy(t => t.Name, StringComparer.Ordinal)
+            .ToList();
+
+        return ranked.Count > 0 ? ranked[0] : null;
     }
 
     /// <summary>

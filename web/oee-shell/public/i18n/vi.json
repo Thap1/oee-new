@@ -77,6 +77,11 @@
       "line": "Line",
       "machine": "Máy",
       "selectTarget": "Chọn..."
+    },
+    "topDowntimeReason": {
+      "title": "Nguyên nhân dừng máy nhiều nhất",
+      "empty": "Không có dữ liệu dừng máy",
+      "seconds": "{{seconds}}s"
     }
   },
   "masterData": {

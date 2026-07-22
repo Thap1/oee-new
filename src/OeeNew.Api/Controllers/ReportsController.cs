@@ -18,7 +18,10 @@ public sealed record OeeReportResponse(
     long PerformanceLossSeconds,
     long QualityLossSeconds,
     long UnattributedSeconds,
-    int QualityRejectQuantity);
+    int QualityRejectQuantity,
+    Guid? TopDowntimeReasonCodeId,
+    string? TopDowntimeReasonName,
+    long? TopDowntimeReasonSeconds);
 
 /// <summary>Aggregated OEE report by Shift/Day/Week (Story 4.1, FR-016). Manager/Viewer/Admin only — Operator is excluded (AC #3).</summary>
 [ApiController]
@@ -62,6 +65,9 @@ public sealed class ReportsController(OeeReportQueryUseCase reportUseCase) : Con
             result.PerformanceLossSeconds,
             result.QualityLossSeconds,
             result.UnattributedSeconds,
-            result.QualityRejectQuantity));
+            result.QualityRejectQuantity,
+            result.TopDowntimeReasonCodeId,
+            result.TopDowntimeReasonName,
+            result.TopDowntimeReasonSeconds));
     }
 }

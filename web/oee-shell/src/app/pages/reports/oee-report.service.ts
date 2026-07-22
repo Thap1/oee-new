@@ -18,6 +18,9 @@ export interface OeeReportDto {
   qualityLossSeconds: number;
   unattributedSeconds: number;
   qualityRejectQuantity: number;
+  topDowntimeReasonCodeId: string | null;
+  topDowntimeReasonName: string | null;
+  topDowntimeReasonSeconds: number | null;
 }
 
 /** yyyy-MM-dd in the browser's local calendar — the backend interprets it as a UTC calendar date (same convention as `loss-analytics.service.ts`'s `toDateParam`). */

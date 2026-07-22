@@ -77,6 +77,11 @@
       "line": "Line",
       "machine": "Machine",
       "selectTarget": "Select..."
+    },
+    "topDowntimeReason": {
+      "title": "Top downtime reason",
+      "empty": "No downtime data",
+      "seconds": "{{seconds}}s"
     }
   },
   "masterData": {

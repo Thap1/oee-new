@@ -93,6 +93,14 @@ import { OeeReportDto, OeeReportService, ReportFilterTargetType, ReportPeriodTyp
             {{ 'reports.qualityReject' | translate }}: {{ r.qualityRejectQuantity }}
           </p>
         </div>
+        <div class="reports-page__top-reason" data-testid="reports-top-downtime-reason">
+          <h3>{{ 'reports.topDowntimeReason.title' | translate }}</h3>
+          @if (r.topDowntimeReasonName; as name) {
+            <p>{{ name }} — {{ 'reports.topDowntimeReason.seconds' | translate: { seconds: r.topDowntimeReasonSeconds } }}</p>
+          } @else {
+            <p data-testid="reports-top-downtime-reason-empty">{{ 'reports.topDowntimeReason.empty' | translate }}</p>
+          }
+        </div>
       }
     </div>
   `,
@@ -125,6 +133,10 @@ import { OeeReportDto, OeeReportService, ReportFilterTargetType, ReportPeriodTyp
         width: 100%;
         opacity: 0.75;
         font-size: 0.9rem;
+      }
+
+      .reports-page__top-reason {
+        margin-top: 1.5rem;
       }
     `,
   ],

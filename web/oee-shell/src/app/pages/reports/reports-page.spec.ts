@@ -18,6 +18,7 @@ const I18N_VI = {
     oee: 'OEE',
     qualityReject: 'Phế phẩm',
     filter: { label: 'Bộ lọc', none: 'Không lọc', site: 'Site', line: 'Line', machine: 'Máy', selectTarget: 'Chọn...' },
+    topDowntimeReason: { title: 'Nguyên nhân dừng máy nhiều nhất', empty: 'Không có dữ liệu dừng máy', seconds: '{{seconds}}s' },
   },
   masterData: {
     error: { generic: 'Đã xảy ra lỗi. Vui lòng thử lại.' },
@@ -38,6 +39,9 @@ function report(overrides: Partial<Record<string, unknown>> = {}) {
     qualityLossSeconds: 20,
     unattributedSeconds: 0,
     qualityRejectQuantity: 3,
+    topDowntimeReasonCodeId: null,
+    topDowntimeReasonName: null,
+    topDowntimeReasonSeconds: null,
     ...overrides,
   };
 }
@@ -242,5 +246,32 @@ describe('ReportsPage', () => {
       .expectOne((r) => r.url.startsWith('/api/reports/oee') && !r.url.includes('filterType'))
       .flush(report());
     await clearPromise;
+  });
+
+  it('renders the top downtime reason name and seconds when present', async () => {
+    const fixture = create();
+
+    httpMock
+      .expectOne((r) => oeeReportRequest(r))
+      .flush(report({ topDowntimeReasonCodeId: 'r1', topDowntimeReasonName: 'Kẹt khuôn', topDowntimeReasonSeconds: 120 }));
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    const section = el.querySelector('[data-testid="reports-top-downtime-reason"]');
+    expect(section?.textContent).toContain('Kẹt khuôn');
+    expect(section?.textContent).toContain('120s');
+    expect(el.querySelector('[data-testid="reports-top-downtime-reason-empty"]')).toBeNull();
+  });
+
+  it('renders the empty state when there is no top downtime reason (AC #3)', async () => {
+    const fixture = create();
+
+    httpMock.expectOne((r) => oeeReportRequest(r)).flush(report());
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="reports-top-downtime-reason-empty"]')?.textContent).toContain('Không có dữ liệu dừng máy');
   });
 });
