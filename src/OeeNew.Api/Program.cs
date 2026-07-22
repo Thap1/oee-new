@@ -10,10 +10,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OeeNew.Api.Errors;
+using OeeNew.Application.Analytics;
 using OeeNew.Application.Auth;
 using OeeNew.Application.Identity;
 using OeeNew.Application.MasterData;
 using OeeNew.Application.Production;
+using OeeNew.Application.Reports;
 using OeeNew.Infrastructure.Identity;
 using OeeNew.Infrastructure.Persistence;
 using OeeNew.Infrastructure.Production;
@@ -79,6 +81,13 @@ builder.Services.AddScoped<IngestProductionReadingUseCase>();
 builder.Services.AddScoped<MachineStatusQueryUseCase>();
 builder.Services.AddScoped<RecordDowntimeReasonUseCase>();
 builder.Services.AddScoped<RecordQualityRejectUseCase>();
+
+// Loss pie chart (Story 3.1 — FR-019/020/021): read-only aggregation over the same Production tables.
+builder.Services.AddScoped<LossBreakdownQueryUseCase>();
+builder.Services.AddScoped<LossAreaOptionsQueryUseCase>();
+
+// OEE report (Story 4.1 — FR-016/017/018): aggregated Availability/Performance/Quality over Shift/Day/Week.
+builder.Services.AddScoped<OeeReportQueryUseCase>();
 
 // Real-time dashboard (Story 2.2 — FR-004, NFR-1, AD-8): one hub for this site instance.
 builder.Services.AddSignalR();
@@ -161,7 +170,8 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
     });
 
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("AdminOnly", policy => policy.RequireClaim(OeeClaimTypes.Role, "Admin"));
+    .AddPolicy("AdminOnly", policy => policy.RequireClaim(OeeClaimTypes.Role, "Admin"))
+    .AddPolicy("ReportsAccess", policy => policy.RequireClaim(OeeClaimTypes.Role, "Admin", "Manager", "Viewer"));
 
 // Throttle login attempts against the bootstrap Admin account (brute-force mitigation).
 builder.Services.AddRateLimiter(options =>

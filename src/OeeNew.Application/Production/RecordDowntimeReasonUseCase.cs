@@ -49,11 +49,12 @@ public sealed class RecordDowntimeReasonUseCase(
             throw new MasterDataValidationException("This reason code does not belong to the machine's Site.");
         }
 
-        var openEvent = await downtimeEvents.GetOpenByMachineIdAsync(machineId, cancellationToken)
-            ?? throw new DowntimeEventNotOpenException();
+        var assigned = await downtimeEvents.TryAssignReasonToOpenEventAsync(machineId, reasonCodeId, cancellationToken);
+        if (!assigned)
+        {
+            throw new DowntimeEventNotOpenException();
+        }
 
-        openEvent.AssignReason(reasonCodeId);
-        await downtimeEvents.UpdateAsync(openEvent, cancellationToken);
         await notifier.NotifyDowntimeReasonRecordedAsync(machineId, reasonCodeId, cancellationToken);
     }
 }

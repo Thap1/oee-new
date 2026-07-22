@@ -18,7 +18,7 @@ export const routes: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       { path: 'dashboard', component: DashboardPage },
       { path: 'downtime', component: DowntimePage },
-      { path: 'reports', component: ReportsPage },
+      { path: 'reports', component: ReportsPage, canActivate: [roleGuard(['Admin', 'Manager', 'Viewer'])] },
       { path: 'master-data', component: MasterDataPage },
     ],
   },

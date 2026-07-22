@@ -190,6 +190,9 @@ internal sealed class FakeReasonCodeRepository : IReasonCodeRepository
     public Task<IReadOnlyList<ReasonCode>> ListBySiteAsync(Guid siteId, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<ReasonCode>>(_reasonCodes.Values.Where(r => r.SiteId == siteId).ToList());
 
+    public Task<IReadOnlyList<ReasonCode>> ListByIdsAsync(IReadOnlyList<Guid> ids, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ReasonCode>>(_reasonCodes.Values.Where(r => ids.Contains(r.Id)).ToList());
+
     public Task UpdateAsync(ReasonCode reasonCode, CancellationToken cancellationToken = default)
     {
         _reasonCodes[reasonCode.Id] = reasonCode;

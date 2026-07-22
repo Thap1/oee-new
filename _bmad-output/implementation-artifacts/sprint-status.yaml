@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-18
-last_updated: 2026-07-21
+last_updated: 2026-07-22 (Epic 4 stories created; Epic 3 done after code review)
 project: oee-new
 project_key: NOKEY
 tracking_system: file-system
@@ -66,15 +66,15 @@ development_status:
   2-6-quality-reject-recording: review
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-loss-pie-chart-view: backlog
-  3-2-loss-pie-chart-drilldown: backlog
+  epic-3: done
+  3-1-loss-pie-chart-view: done
+  3-2-loss-pie-chart-drilldown: done
   epic-3-retrospective: optional
 
-  epic-4: backlog
-  4-1-oee-report-shift-day-week: backlog
-  4-2-report-site-line-machine-filter: backlog
-  4-3-top-downtime-reason-report: backlog
+  epic-4: in-progress
+  4-1-oee-report-shift-day-week: ready-for-dev
+  4-2-report-site-line-machine-filter: ready-for-dev
+  4-3-top-downtime-reason-report: ready-for-dev
   epic-4-retrospective: optional
 
   epic-5: backlog

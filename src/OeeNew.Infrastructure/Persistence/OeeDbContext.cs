@@ -128,6 +128,13 @@ public sealed class OeeDbContext(DbContextOptions<OeeDbContext> options) : DbCon
             downtimeEvent.HasOne<Machine>().WithMany().HasForeignKey(e => e.MachineId).OnDelete(DeleteBehavior.Restrict);
             // Nullable FK: an event can close before an Operator ever attaches a reason (Story 2.5 Dev Notes).
             downtimeEvent.HasOne<ReasonCode>().WithMany().HasForeignKey(e => e.ReasonCodeId).OnDelete(DeleteBehavior.Restrict);
+            // DB-level backstop for "at most one open DowntimeEvent per machine": the application layer's
+            // transition logic (IngestProductionReadingUseCase) already prevents duplicates in practice, but
+            // this closes the gap if that ever regresses or a second writer bypasses the use case.
+            downtimeEvent.HasIndex(e => e.MachineId)
+                .IsUnique()
+                .HasFilter("\"EndedAt\" IS NULL")
+                .HasDatabaseName("IX_DowntimeEvent_MachineId_OpenOnly");
         });
 
         modelBuilder.Entity<QualityReject>(qualityReject =>

@@ -19,6 +19,9 @@ public sealed class ReasonCodeRepository(OeeDbContext context) : IReasonCodeRepo
     public async Task<IReadOnlyList<ReasonCode>> ListBySiteAsync(Guid siteId, CancellationToken cancellationToken = default) =>
         await context.ReasonCodes.Where(r => r.SiteId == siteId).OrderBy(r => r.Name).ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<ReasonCode>> ListByIdsAsync(IReadOnlyList<Guid> ids, CancellationToken cancellationToken = default) =>
+        await context.ReasonCodes.Where(r => ids.Contains(r.Id)).ToListAsync(cancellationToken);
+
     public Task UpdateAsync(ReasonCode reasonCode, CancellationToken cancellationToken = default) =>
         context.SaveChangesAsync(cancellationToken);
 
