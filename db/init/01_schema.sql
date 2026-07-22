@@ -174,3 +174,126 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260721131824_AddMachineState') THEN
+    CREATE TABLE "MachineState" (
+        "MachineId" uuid NOT NULL,
+        "Status" smallint NOT NULL,
+        "Counter" bigint NOT NULL,
+        "LastReportedAt" timestamp with time zone NOT NULL,
+        CONSTRAINT "PK_MachineState" PRIMARY KEY ("MachineId"),
+        CONSTRAINT "FK_MachineState_Machine_MachineId" FOREIGN KEY ("MachineId") REFERENCES "Machine" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260721131824_AddMachineState') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20260721131824_AddMachineState', '10.0.10');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260721142436_AddDowntimeEvent') THEN
+    CREATE TABLE "DowntimeEvent" (
+        "Id" uuid NOT NULL DEFAULT (uuidv7()),
+        "MachineId" uuid NOT NULL,
+        "ReasonCodeId" uuid,
+        "StartedAt" timestamp with time zone NOT NULL,
+        "EndedAt" timestamp with time zone,
+        CONSTRAINT "PK_DowntimeEvent" PRIMARY KEY ("Id"),
+        CONSTRAINT "FK_DowntimeEvent_Machine_MachineId" FOREIGN KEY ("MachineId") REFERENCES "Machine" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_DowntimeEvent_ReasonCode_ReasonCodeId" FOREIGN KEY ("ReasonCodeId") REFERENCES "ReasonCode" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260721142436_AddDowntimeEvent') THEN
+    CREATE INDEX "IX_DowntimeEvent_MachineId" ON "DowntimeEvent" ("MachineId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260721142436_AddDowntimeEvent') THEN
+    CREATE INDEX "IX_DowntimeEvent_ReasonCodeId" ON "DowntimeEvent" ("ReasonCodeId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260721142436_AddDowntimeEvent') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20260721142436_AddDowntimeEvent', '10.0.10');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260721145129_AddQualityReject') THEN
+    CREATE TABLE "QualityReject" (
+        "Id" uuid NOT NULL DEFAULT (uuidv7()),
+        "MachineId" uuid NOT NULL,
+        "Quantity" integer NOT NULL,
+        "RecordedAt" timestamp with time zone NOT NULL,
+        CONSTRAINT "PK_QualityReject" PRIMARY KEY ("Id"),
+        CONSTRAINT "FK_QualityReject_Machine_MachineId" FOREIGN KEY ("MachineId") REFERENCES "Machine" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260721145129_AddQualityReject') THEN
+    CREATE INDEX "IX_QualityReject_MachineId" ON "QualityReject" ("MachineId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260721145129_AddQualityReject') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20260721145129_AddQualityReject', '10.0.10');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260722113021_AddDowntimeEventOpenUniqueIndex') THEN
+    DROP INDEX "IX_DowntimeEvent_MachineId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260722113021_AddDowntimeEventOpenUniqueIndex') THEN
+    CREATE UNIQUE INDEX "IX_DowntimeEvent_MachineId_OpenOnly" ON "DowntimeEvent" ("MachineId") WHERE "EndedAt" IS NULL;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260722113021_AddDowntimeEventOpenUniqueIndex') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20260722113021_AddDowntimeEventOpenUniqueIndex', '10.0.10');
+    END IF;
+END $EF$;
+COMMIT;
+
