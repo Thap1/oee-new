@@ -33,6 +33,21 @@ public sealed class ReportsController(OeeReportQueryUseCase reportUseCase) : Con
         [FromQuery] ReportPeriodType periodType, [FromQuery] DateOnly referenceDate, [FromQuery] Guid? shiftScheduleId,
         [FromQuery] ReportFilterTargetType? filterType, [FromQuery] Guid? filterId, CancellationToken cancellationToken)
     {
+        // Code-review fix: default enum query-string binding accepts any integer that parses to the
+        // enum's underlying type (e.g. periodType=99), not just defined members — without this check, an
+        // out-of-range value sails past the paired-argument checks below and hits ResolvePeriod's/
+        // ResolveFilterMachinesAsync's `default: throw ArgumentOutOfRangeException`, which isn't mapped by
+        // ApiExceptionHandler and surfaces as a 500 instead of a 400.
+        if (!Enum.IsDefined(periodType))
+        {
+            return BadRequest(new ApiErrorResponse { Code = "VALIDATION_ERROR", Message = "periodType is not a recognized value." });
+        }
+
+        if (filterType is { } definedFilterType && !Enum.IsDefined(definedFilterType))
+        {
+            return BadRequest(new ApiErrorResponse { Code = "VALIDATION_ERROR", Message = "filterType is not a recognized value." });
+        }
+
         if ((periodType == ReportPeriodType.Shift) != (shiftScheduleId is not null))
         {
             return BadRequest(new ApiErrorResponse

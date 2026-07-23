@@ -1,10 +1,11 @@
+using OeeNew.Application;
 using OeeNew.Application.Auth;
 using OeeNew.Domain.MasterData;
 
 namespace OeeNew.Application.MasterData;
 
 /// <summary>Create/reschedule/delete/list Shift Schedules under a Site (Story 1.3, AC #1, #2, #3 — FR-012; scope-filtered per Story 1.6, AC #2/#4). Admin-only for writes, re-checked here in addition to the API-layer policy.</summary>
-public sealed class ShiftScheduleManagementUseCase(IShiftScheduleRepository shifts, ISiteRepository sites, ILineRepository lines)
+public sealed class ShiftScheduleManagementUseCase(IShiftScheduleRepository shifts, ISiteRepository sites, ILineRepository lines, AppModeInfo appMode)
 {
     public async Task<IReadOnlyList<ShiftSchedule>> ListBySiteAsync(CallerScope scope, Guid siteId, CancellationToken cancellationToken = default)
     {
@@ -19,6 +20,7 @@ public sealed class ShiftScheduleManagementUseCase(IShiftScheduleRepository shif
     public async Task<ShiftSchedule> CreateAsync(
         string? callerRole, Guid siteId, Guid? lineId, string name, TimeOnly startTime, TimeOnly endTime, CancellationToken cancellationToken = default)
     {
+        MasterDataAuthorization.EnsureNotCentral(appMode);
         MasterDataAuthorization.EnsureAdmin(callerRole);
         await EnsureParentsExistAsync(siteId, lineId, cancellationToken);
 
@@ -31,6 +33,7 @@ public sealed class ShiftScheduleManagementUseCase(IShiftScheduleRepository shif
     public async Task<ShiftSchedule> RescheduleAsync(
         string? callerRole, Guid id, string name, TimeOnly startTime, TimeOnly endTime, CancellationToken cancellationToken = default)
     {
+        MasterDataAuthorization.EnsureNotCentral(appMode);
         MasterDataAuthorization.EnsureAdmin(callerRole);
         var shift = await shifts.GetAsync(id, cancellationToken) ?? throw new MasterDataNotFoundException("ShiftSchedule", id);
 
@@ -44,6 +47,7 @@ public sealed class ShiftScheduleManagementUseCase(IShiftScheduleRepository shif
 
     public async Task DeleteAsync(string? callerRole, Guid id, CancellationToken cancellationToken = default)
     {
+        MasterDataAuthorization.EnsureNotCentral(appMode);
         MasterDataAuthorization.EnsureAdmin(callerRole);
         var shift = await shifts.GetAsync(id, cancellationToken) ?? throw new MasterDataNotFoundException("ShiftSchedule", id);
         await shifts.DeleteAsync(shift, cancellationToken);

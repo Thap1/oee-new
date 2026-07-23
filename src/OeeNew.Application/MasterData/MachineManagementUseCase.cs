@@ -1,10 +1,11 @@
+using OeeNew.Application;
 using OeeNew.Application.Auth;
 using OeeNew.Domain.MasterData;
 
 namespace OeeNew.Application.MasterData;
 
 /// <summary>Create/rename/delete/list Machines under a Line (Story 1.2, AC #3 — FR-011; scope-filtered per Story 1.6, AC #2/#4). Admin-only for writes, re-checked here in addition to the API-layer policy.</summary>
-public sealed class MachineManagementUseCase(IMachineRepository machines, ILineRepository lines)
+public sealed class MachineManagementUseCase(IMachineRepository machines, ILineRepository lines, AppModeInfo appMode)
 {
     public async Task<IReadOnlyList<Machine>> ListByLineAsync(CallerScope scope, Guid lineId, CancellationToken cancellationToken = default)
     {
@@ -23,6 +24,7 @@ public sealed class MachineManagementUseCase(IMachineRepository machines, ILineR
 
     public async Task<Machine> CreateAsync(string? callerRole, Guid lineId, string name, CancellationToken cancellationToken = default)
     {
+        MasterDataAuthorization.EnsureNotCentral(appMode);
         MasterDataAuthorization.EnsureAdmin(callerRole);
 
         var lineExists = await lines.GetAsync(lineId, cancellationToken) is not null;
@@ -36,6 +38,7 @@ public sealed class MachineManagementUseCase(IMachineRepository machines, ILineR
 
     public async Task<Machine> RenameAsync(string? callerRole, Guid id, string name, CancellationToken cancellationToken = default)
     {
+        MasterDataAuthorization.EnsureNotCentral(appMode);
         MasterDataAuthorization.EnsureAdmin(callerRole);
         var machine = await machines.GetAsync(id, cancellationToken) ?? throw new MasterDataNotFoundException("Machine", id);
         machine.Rename(name);
@@ -45,6 +48,7 @@ public sealed class MachineManagementUseCase(IMachineRepository machines, ILineR
 
     public async Task DeleteAsync(string? callerRole, Guid id, CancellationToken cancellationToken = default)
     {
+        MasterDataAuthorization.EnsureNotCentral(appMode);
         MasterDataAuthorization.EnsureAdmin(callerRole);
         var machine = await machines.GetAsync(id, cancellationToken) ?? throw new MasterDataNotFoundException("Machine", id);
         await machines.DeleteAsync(machine, cancellationToken);

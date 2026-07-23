@@ -38,6 +38,8 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
             new ApiErrorResponse { Code = "PARENT_NOT_FOUND", Message = parentNotFound.Message }),
         MasterDataForbiddenException forbidden => (StatusCodes.Status403Forbidden,
             new ApiErrorResponse { Code = "FORBIDDEN", Message = forbidden.Message }),
+        CentralReadOnlyException centralReadOnly => (StatusCodes.Status403Forbidden,
+            new ApiErrorResponse { Code = "CENTRAL_READ_ONLY", Message = centralReadOnly.Message }),
         MasterDataHasDependentsException hasDependents => (StatusCodes.Status409Conflict,
             new ApiErrorResponse
             {

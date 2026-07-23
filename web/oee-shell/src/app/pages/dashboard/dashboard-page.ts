@@ -1,5 +1,6 @@
 import { Component, OnDestroy, OnInit, computed, effect, signal } from '@angular/core';
 import { TranslatePipe } from '@ngx-translate/core';
+import { AppModeService } from '../../core/app-mode/app-mode.service';
 import { MachineStatusChangedEvent, MachineStatusHubService } from '../../core/realtime/machine-status-hub.service';
 import { MasterDataService, ReasonCodeDto } from '../master-data/master-data.service';
 import { DashboardService, MachineStatusDto } from './dashboard.service';
@@ -25,44 +26,52 @@ const PULSE_DURATION_MS = 700;
   standalone: true,
   imports: [TranslatePipe, MachineStatusCard, ReasonCodePicker, LossPieChart],
   template: `
-    <div class="dashboard-header">
-      <h2>{{ 'nav.dashboard' | translate }}</h2>
-      <p class="dashboard-header__subtitle">{{ 'dashboard.subtitle' | translate }}</p>
-    </div>
-    @if (loadError()) {
-      <div class="dashboard-empty-state" data-testid="dashboard-load-error">
-        <i class="pi pi-exclamation-triangle" aria-hidden="true"></i>
-        <div class="dashboard-empty-state__title">{{ 'dashboard.loadError.title' | translate }}</div>
-        <div class="dashboard-empty-state__message">{{ 'dashboard.loadError.message' | translate }}</div>
-        <button type="button" class="dashboard-empty-state__action" data-testid="dashboard-load-error-retry" (click)="retryLoad()">
-          {{ 'dashboard.loadError.retry' | translate }}
-        </button>
+    @if (appMode.isCentral()) {
+      <div class="dashboard-header">
+        <h2>{{ 'dashboard.centralAggregateTitle' | translate }}</h2>
+        <p class="dashboard-header__subtitle">{{ 'dashboard.centralAggregateSubtitle' | translate }}</p>
       </div>
-    } @else if (loaded() && machines().length === 0) {
-      <div class="dashboard-empty-state" data-testid="dashboard-empty-state">
-        <i class="pi pi-info-circle" aria-hidden="true"></i>
-        <div class="dashboard-empty-state__title">{{ 'dashboard.emptyState.title' | translate }}</div>
-        <div class="dashboard-empty-state__message">{{ 'dashboard.emptyState.message' | translate }}</div>
-      </div>
+      <app-loss-pie-chart [equipmentOptions]="[]" />
     } @else {
-      <div class="dashboard-grid">
-        @for (machine of machines(); track machine.machineId) {
-          <app-machine-status-card
-            [snapshot]="machine"
-            [justUpdated]="recentlyUpdated().has(machine.machineId)"
-            [noSignalThresholdSeconds]="noSignalThresholdSeconds()"
-            (cardTapped)="onCardTapped($event)"
-          />
-        }
+      <div class="dashboard-header">
+        <h2>{{ 'nav.dashboard' | translate }}</h2>
+        <p class="dashboard-header__subtitle">{{ 'dashboard.subtitle' | translate }}</p>
       </div>
+      @if (loadError()) {
+        <div class="dashboard-empty-state" data-testid="dashboard-load-error">
+          <i class="pi pi-exclamation-triangle" aria-hidden="true"></i>
+          <div class="dashboard-empty-state__title">{{ 'dashboard.loadError.title' | translate }}</div>
+          <div class="dashboard-empty-state__message">{{ 'dashboard.loadError.message' | translate }}</div>
+          <button type="button" class="dashboard-empty-state__action" data-testid="dashboard-load-error-retry" (click)="retryLoad()">
+            {{ 'dashboard.loadError.retry' | translate }}
+          </button>
+        </div>
+      } @else if (loaded() && machines().length === 0) {
+        <div class="dashboard-empty-state" data-testid="dashboard-empty-state">
+          <i class="pi pi-info-circle" aria-hidden="true"></i>
+          <div class="dashboard-empty-state__title">{{ 'dashboard.emptyState.title' | translate }}</div>
+          <div class="dashboard-empty-state__message">{{ 'dashboard.emptyState.message' | translate }}</div>
+        </div>
+      } @else {
+        <div class="dashboard-grid">
+          @for (machine of machines(); track machine.machineId) {
+            <app-machine-status-card
+              [snapshot]="machine"
+              [justUpdated]="recentlyUpdated().has(machine.machineId)"
+              [noSignalThresholdSeconds]="noSignalThresholdSeconds()"
+              (cardTapped)="onCardTapped($event)"
+            />
+          }
+        </div>
+      }
+      <app-loss-pie-chart [equipmentOptions]="equipmentOptions()" />
+      <app-reason-code-picker
+        [open]="pickerOpen()"
+        [reasonCodes]="pickerReasonCodes()"
+        (reasonSelected)="onReasonSelected($event)"
+        (closed)="closePicker()"
+      />
     }
-    <app-loss-pie-chart [equipmentOptions]="equipmentOptions()" />
-    <app-reason-code-picker
-      [open]="pickerOpen()"
-      [reasonCodes]="pickerReasonCodes()"
-      (reasonSelected)="onReasonSelected($event)"
-      (closed)="closePicker()"
-    />
   `,
   styles: [
     `
@@ -86,7 +95,7 @@ const PULSE_DURATION_MS = 700;
 
       .dashboard-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         gap: 1.25rem;
         margin-bottom: 2rem;
       }
@@ -169,6 +178,7 @@ export class DashboardPage implements OnInit, OnDestroy {
     private readonly dashboardService: DashboardService,
     private readonly masterDataService: MasterDataService,
     private readonly hub: MachineStatusHubService,
+    readonly appMode: AppModeService,
   ) {
     effect(() => {
       const event = this.hub.lastEvent();
@@ -179,6 +189,13 @@ export class DashboardPage implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
+    await this.appMode.load();
+    if (this.appMode.isCentral()) {
+      // Central never receives MachineState (Story 5.1's sync payload deliberately excludes live
+      // signal state) — every synced Machine would otherwise show a permanent false "no signal."
+      return;
+    }
+
     await this.loadMachineStates();
   }
 

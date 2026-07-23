@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OeeNew.Api.Errors;
+using OeeNew.Application;
 using OeeNew.Application.Analytics;
 using OeeNew.Application.Auth;
 using OeeNew.Application.Identity;
@@ -19,6 +20,7 @@ using OeeNew.Application.Reports;
 using OeeNew.Application.Sync;
 using OeeNew.Api.Sync;
 using OeeNew.Infrastructure.Identity;
+using OeeNew.Infrastructure.MasterData;
 using OeeNew.Infrastructure.Persistence;
 using OeeNew.Infrastructure.Production;
 using OeeNew.Infrastructure.RealTime;
@@ -40,13 +42,20 @@ if (!string.IsNullOrEmpty(port))
 }
 
 // AppMode: Site | Central (Architecture Spine AD-2) — same binary, different modules enabled.
+// `appMode` (the local) drives conditional service *registration* below and must be read eagerly, since
+// registration itself happens before the host is built. `AppModeInfo` (the DI singleton, resolved by
+// SyncController per-request) is registered as a lazy factory instead of a fixed instance so its value
+// reflects IConfiguration as of first resolution (post-Build) — the same "read late, not at registration
+// time" pattern already relied on for the DB connection string, and what lets integration tests flip
+// AppMode via WebApplicationFactory's ConfigureAppConfiguration (Story 5.1's Central-mode test host).
 var appMode = builder.Configuration.GetValue<string>("AppMode") ?? "Site";
-builder.Services.AddSingleton(new AppModeInfo(appMode));
+builder.Services.AddSingleton(sp => new AppModeInfo(sp.GetRequiredService<IConfiguration>().GetValue<string>("AppMode") ?? "Site"));
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<BootstrapAdminOptions>(builder.Configuration.GetSection(BootstrapAdminOptions.SectionName));
 builder.Services.Configure<ProductionOptions>(builder.Configuration.GetSection(ProductionOptions.SectionName));
 builder.Services.Configure<SyncOptions>(builder.Configuration.GetSection(SyncOptions.SectionName));
+builder.Services.Configure<CentralOptions>(builder.Configuration.GetSection(CentralOptions.SectionName));
 
 // Central Identity Provider (AD-7): signing keys + token issuance + credential validation.
 builder.Services.AddSingleton<IJwtSigningKeyProvider, RsaJwtSigningKeyProvider>();
@@ -268,7 +277,5 @@ app.MapHub<MachineStatusHub>("/hubs/machine-status").RequireAuthorization();
 app.MapFallbackToFile("index.html");
 
 app.Run();
-
-public sealed record AppModeInfo(string Mode);
 
 public partial class Program;

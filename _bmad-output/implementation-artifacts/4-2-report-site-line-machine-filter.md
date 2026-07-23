@@ -4,7 +4,7 @@ baseline_commit: 9ed4738da848404782bd3f29958b1547190f72a8
 
 # Story 4.2: Lọc báo cáo theo site/line/máy
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -65,6 +65,15 @@ so that I can narrow down to what I actually manage.
 - [Source: src/OeeNew.Application/MasterData/MachineManagementUseCase.cs:9-19] — confirms `GET api/master-data/lines/{lineId}/machines` is already scope-enforced, reused as-is for the Machine filter dropdown (Task 2)
 - [Source: web/oee-shell/src/app/core/scope/scope.service.ts] — `sites()`/`lines()` signals reused directly for the Site/Line filter dropdown options (Task 3), not refetched
 
+### Review Findings
+
+Epic 4 code review (2026-07-23), scoped across Stories 4.1/4.2/4.3 together (`bmad-code-review`, 3 parallel layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor).
+
+- [x] [Review][Patch] `GetOeeReport_MachineFilter_ReturnsReportCountingOnlyThatMachine` (added by this story's Task 4) seeded no downtime and asserted nothing about which machine's data was counted — it could not actually distinguish "correctly filtered" from "filter silently ignored," despite its name. Fixed: now seeds different downtime on two machines and asserts the response counts only the filtered machine's seconds. [tests/OeeNew.Api.Tests/Reports/ReportsEndpointsTests.cs]
+- [x] [Review][Patch] Picking a Machine filter and then switching the topbar Line left the stale `filterId` selected against a freshly-reloaded, unrelated machine list, with the old report still displayed. Fixed: the Line-change `effect()` now clears `filterIdSignal`/`reportSignal` before reloading. New test: `switching the topbar Line while a Machine filter is picked clears the stale filterId and report`. [web/oee-shell/src/app/pages/reports/reports-page.ts]
+- [x] [Review][Patch] `ListClosedSlicesInRangeAsync`'s `StartedAt`-only range filter didn't clip/prorate downtime spanning a period boundary — most consequential for this story's narrower filtered/Shift-scoped windows. Originally deferred pending explicit product sign-off (the fix changes reported figures and at least one existing test's expectation); user asked to fix directly (2026-07-23 follow-up). Fixed: `ClosedDowntimeSlice` gained `StartedAt`/`EndedAt`; `ListClosedSlicesInRangeAsync`'s WHERE clause changed to an overlap check (`StartedAt < end && EndedAt > start`, both real repository and fake); `OeeReportQueryUseCase` clips each slice to the window before summing. `GetReportAsync_Day_UsesExactUtcCalendarDayBoundaries` updated; new test `GetReportAsync_Shift_EventRunningPastShiftEnd_IsClippedToShiftWindow_NotCountedInFull` proves a Shift-spanning event no longer inflates the loss total past the shift's own planned time. [src/OeeNew.Application/Production/IDowntimeEventRepository.cs, src/OeeNew.Infrastructure/Persistence/DowntimeEventRepository.cs, tests/OeeNew.Application.Tests/Production/FakeDowntimeEventRepository.cs, src/OeeNew.Application/Reports/OeeReportQueryUseCase.cs]
+- [x] [Review][Patch] No error/feedback when the Machine filter level is picked with no topbar Line currently selected — the dependent dropdown just stayed empty with no explanation. Fixed (2026-07-23 follow-up): `ReportsPage` gained a `contextHint` computed signal rendering a guidance message (distinct from the generic error banner) for this case and the analogous Shift-with-no-Site case. New tests: `shows a guidance hint ... when Shift is picked with no topbar Site selected`, `shows a guidance hint when the Machine filter is picked with no topbar Line selected`, `clears the guidance hint once a Site is selected and a Shift loads`. [web/oee-shell/src/app/pages/reports/reports-page.ts]
+
 ## Dev Agent Record
 
 ### Agent Model Used
@@ -107,3 +116,5 @@ None — no blocking failures. Frontend filter tests needed one fix: `ScopeServi
 ## Change Log
 
 - 2026-07-22: Story 4.2 implemented — Site/Line/Machine report filter added on top of Story 4.1's `OeeReportQueryUseCase`/`ReportsController`/`ReportsPage`, purely additive, no new use-case class or endpoint. All tasks/subtasks complete, all ACs satisfied, backend and frontend tests green. Status: ready-for-dev → review.
+- 2026-07-23: Epic 4 code review — strengthened the under-verified Machine-filter API test and fixed the stale-filter-selection UI bug (see Review Findings). 2 deferred items logged to `deferred-work.md`. Backend/frontend regression green. Status: review → done.
+- 2026-07-23 (follow-up): user asked to fix all remaining issues — resolved both previously-deferred items: the downtime-boundary-clipping gap (`ClosedDowntimeSlice` now carries `StartedAt`/`EndedAt`, range query uses an overlap check, sums are clipped to the window) and the missing UI feedback for Machine-filter-with-no-Line. `deferred-work.md`'s Epic 4 section removed. Full regression: 177/177 Application.Tests, 93/93 Api.Tests, 17/17 + 61/61 frontend.

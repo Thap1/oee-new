@@ -53,16 +53,18 @@ internal sealed class FakeDowntimeEventRepository : IDowntimeEventRepository
         }
 
         return Task.FromResult<IReadOnlyList<ClosedDowntimeSlice>>(
-            query.Select(s => new ClosedDowntimeSlice(s.MachineId, s.ReasonCodeId, s.LossCategory, s.DurationSeconds)).ToList());
+            query.Select(s => new ClosedDowntimeSlice(s.MachineId, s.ReasonCodeId, s.LossCategory, s.DurationSeconds, s.StartedAt, s.StartedAt.AddSeconds(s.DurationSeconds))).ToList());
     }
 
     public Task<IReadOnlyList<ClosedDowntimeSlice>> ListClosedSlicesInRangeAsync(
         IReadOnlyList<Guid> machineIds, DateTimeOffset start, DateTimeOffset end, CancellationToken cancellationToken = default)
     {
-        var query = _closedSlices.Where(s => machineIds.Contains(s.MachineId) && s.StartedAt >= start && s.StartedAt < end);
+        // Code-review fix (Epic 4): overlap check, matching the real repository's ListClosedSlicesInRangeAsync.
+        var query = _closedSlices.Where(s =>
+            machineIds.Contains(s.MachineId) && s.StartedAt < end && s.StartedAt.AddSeconds(s.DurationSeconds) > start);
 
         return Task.FromResult<IReadOnlyList<ClosedDowntimeSlice>>(
-            query.Select(s => new ClosedDowntimeSlice(s.MachineId, s.ReasonCodeId, s.LossCategory, s.DurationSeconds)).ToList());
+            query.Select(s => new ClosedDowntimeSlice(s.MachineId, s.ReasonCodeId, s.LossCategory, s.DurationSeconds, s.StartedAt, s.StartedAt.AddSeconds(s.DurationSeconds))).ToList());
     }
 
     /// <summary>Seeds a closed event's aggregation-relevant shape directly (Story 3.1 tests) — bypasses the open/close/assign-reason lifecycle above, which isn't what these tests exercise. Auto-generates a distinct ReasonCodeId when a category is given, preserving the "category non-null iff reason non-null" invariant for tests that don't care which specific reason code it is.</summary>

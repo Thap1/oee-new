@@ -19,6 +19,8 @@ const I18N_VI = {
     qualityReject: 'Phế phẩm',
     filter: { label: 'Bộ lọc', none: 'Không lọc', site: 'Site', line: 'Line', machine: 'Máy', selectTarget: 'Chọn...' },
     topDowntimeReason: { title: 'Nguyên nhân dừng máy nhiều nhất', empty: 'Không có dữ liệu dừng máy', seconds: '{{seconds}}s' },
+    noSiteForShift: 'Chọn một Site ở thanh trên để xem các ca làm việc.',
+    noLineForMachineFilter: 'Chọn một Line ở thanh trên để xem các máy.',
   },
   masterData: {
     error: { generic: 'Đã xảy ra lỗi. Vui lòng thử lại.' },
@@ -248,6 +250,66 @@ describe('ReportsPage', () => {
     await clearPromise;
   });
 
+  it('switching the topbar Line while a Machine filter is picked clears the stale filterId and report (code-review fix)', async () => {
+    const fixture = create();
+    httpMock.expectOne((r) => oeeReportRequest(r)).flush(report());
+
+    const scope = TestBed.inject(ScopeService);
+    scope.selectLine('line-1');
+    fixture.detectChanges();
+    const typePromise = fixture.componentInstance.onFilterTypeChange('Machine');
+    httpMock.expectOne('/api/master-data/lines/line-1/machines').flush([{ id: 'm1', name: 'Machine 1', lineId: 'line-1' }]);
+    await typePromise;
+    const idPromise = fixture.componentInstance.onFilterIdChange('m1');
+    httpMock.expectOne((r) => oeeReportRequest(r, { filterType: 'Machine', filterId: 'm1' })).flush(report());
+    await idPromise;
+    expect(fixture.componentInstance.filterId()).toBe('m1');
+    expect(fixture.componentInstance.report()).not.toBeNull();
+
+    // Switch to a different Line — the previously picked machine (m1, on line-1) no longer applies.
+    scope.selectLine('line-2');
+    fixture.detectChanges();
+    httpMock.expectOne('/api/master-data/lines/line-2/machines').flush([{ id: 'm2', name: 'Machine 2', lineId: 'line-2' }]);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.filterId()).toBeNull();
+    expect(fixture.componentInstance.report()).toBeNull();
+    expect(fixture.componentInstance.filterTargetOptions()).toEqual([{ label: 'Machine 2', value: 'm2' }]);
+  });
+
+  it('switching the topbar Site while a Shift is picked clears the stale shiftScheduleId and report (code-review fix)', async () => {
+    const fixture = create();
+    httpMock.expectOne((r) => oeeReportRequest(r)).flush(report());
+
+    const scope = TestBed.inject(ScopeService);
+    scope.selectedSiteId.set('site-1');
+    fixture.detectChanges();
+    const typePromise = fixture.componentInstance.onPeriodTypeChange('Shift');
+    httpMock.expectOne('/api/master-data/sites/site-1/shift-schedules').flush([
+      { id: 'shift-1', siteId: 'site-1', lineId: null, name: 'Day Shift', startTime: '08:00:00', endTime: '16:00:00' },
+    ]);
+    await typePromise;
+    const shiftPromise = fixture.componentInstance.onShiftChange('shift-1');
+    httpMock.expectOne((r) => oeeReportRequest(r, { shiftScheduleId: 'shift-1' })).flush(report({ periodType: 'Shift' }));
+    await shiftPromise;
+    expect(fixture.componentInstance.shiftScheduleId()).toBe('shift-1');
+    expect(fixture.componentInstance.report()).not.toBeNull();
+
+    // Switch to a different Site — the previously picked shift (shift-1, on site-1) no longer applies.
+    scope.selectedSiteId.set('site-2');
+    fixture.detectChanges();
+    httpMock.expectOne('/api/master-data/sites/site-2/shift-schedules').flush([
+      { id: 'shift-2', siteId: 'site-2', lineId: null, name: 'Night Shift', startTime: '20:00:00', endTime: '04:00:00' },
+    ]);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.shiftScheduleId()).toBeNull();
+    expect(fixture.componentInstance.report()).toBeNull();
+    expect(fixture.componentInstance.shiftOptions()).toEqual([{ label: 'Night Shift', value: 'shift-2' }]);
+  });
+
   it('renders the top downtime reason name and seconds when present', async () => {
     const fixture = create();
 
@@ -273,5 +335,55 @@ describe('ReportsPage', () => {
 
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelector('[data-testid="reports-top-downtime-reason-empty"]')?.textContent).toContain('Không có dữ liệu dừng máy');
+  });
+
+  it('shows a guidance hint (not the generic error) when Shift is picked with no topbar Site selected (code-review fix)', async () => {
+    const fixture = create();
+    httpMock.expectOne((r) => oeeReportRequest(r)).flush(report());
+
+    // ScopeService.selectedSiteId defaults to null until loadSites() resolves — simulates that window.
+    const typePromise = fixture.componentInstance.onPeriodTypeChange('Shift');
+    await typePromise;
+    fixture.detectChanges();
+
+    // No /api/master-data/sites/{id}/shift-schedules request pending — httpMock.verify() proves it.
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="reports-context-hint"]')?.textContent).toContain(
+      'Chọn một Site ở thanh trên để xem các ca làm việc.',
+    );
+    expect(el.querySelector('[data-testid="reports-error"]')).toBeNull();
+  });
+
+  it('shows a guidance hint when the Machine filter is picked with no topbar Line selected (code-review fix)', async () => {
+    const fixture = create();
+    httpMock.expectOne((r) => oeeReportRequest(r)).flush(report());
+
+    const typePromise = fixture.componentInstance.onFilterTypeChange('Machine');
+    await typePromise;
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="reports-context-hint"]')?.textContent).toContain(
+      'Chọn một Line ở thanh trên để xem các máy.',
+    );
+  });
+
+  it('clears the guidance hint once a Site is selected and a Shift loads', async () => {
+    const fixture = create();
+    httpMock.expectOne((r) => oeeReportRequest(r)).flush(report());
+
+    const typePromise = fixture.componentInstance.onPeriodTypeChange('Shift');
+    await typePromise;
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="reports-context-hint"]')).not.toBeNull();
+
+    const scope = TestBed.inject(ScopeService);
+    scope.selectedSiteId.set('site-1');
+    fixture.detectChanges();
+    httpMock.expectOne('/api/master-data/sites/site-1/shift-schedules').flush([]);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="reports-context-hint"]')).toBeNull();
   });
 });

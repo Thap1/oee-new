@@ -18,6 +18,8 @@
   },
   "dashboard": {
     "subtitle": "Live status of every machine in your scope",
+    "centralAggregateTitle": "Cross-Site Aggregate",
+    "centralAggregateSubtitle": "Aggregated data across all sites, updated on the sync cycle — not a live view",
     "status": {
       "Running": "Running",
       "Stopped": "Stopped",
@@ -83,7 +85,9 @@
       "title": "Top downtime reason",
       "empty": "No downtime data",
       "seconds": "{{seconds}}s"
-    }
+    },
+    "noSiteForShift": "Select a Site in the top bar to see its shifts.",
+    "noLineForMachineFilter": "Select a Line in the top bar to see its machines."
   },
   "masterData": {
     "sites": "Sites",
@@ -111,6 +115,7 @@
     "deactivate": "Deactivate",
     "status": "Status",
     "actions": "Actions",
+    "openAtSite": "Open at Site",
     "lossCategory": {
       "label": "Loss Category",
       "AvailabilityLoss": "Availability Loss",
@@ -132,6 +137,7 @@
       "shiftOverlap": "This shift overlaps an existing one: {{message}}",
       "validationError": "Invalid data: {{message}}",
       "forbidden": "You do not have permission to perform this action.",
+      "centralReadOnly": "This data is read-only at the Central instance. Make this change at the owning Site instead.",
       "usernameTaken": "That username is already taken.",
       "generic": "Something went wrong. Please try again."
     }

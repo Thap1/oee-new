@@ -10,7 +10,7 @@
       <ng-template pTemplate="title">
         <div class="master-data__panel-header">
           <h3>{{ 'masterData.sites' | translate }}</h3>
-          @if (isAdmin()) {
+          @if (isAdmin() && !isReadOnly()) {
             <p-button
               icon="pi pi-plus"
               [text]="true"
@@ -34,9 +34,16 @@
             (click)="selectSite(site)"
             [attr.data-testid]="'site-row-' + site.name"
           >
-            <td>{{ site.name }}</td>
+            <td>
+              {{ site.name }}
+              @if (isReadOnly() && site.openAtUrl) {
+                <a [href]="site.openAtUrl" target="_blank" rel="noopener" class="master-data__open-at-site" data-testid="open-at-site-link">
+                  {{ 'masterData.openAtSite' | translate }}
+                </a>
+              }
+            </td>
             <td class="master-data__actions">
-              @if (isAdmin()) {
+              @if (isAdmin() && !isReadOnly()) {
                 <p-button icon="pi pi-pencil" [text]="true" (click)="$event.stopPropagation(); openEdit('site', site.id, site.name)" data-testid="edit-site-btn" />
                 <p-button icon="pi pi-trash" [text]="true" severity="danger" (click)="$event.stopPropagation(); deleteSite(site)" data-testid="delete-site-btn" />
               }
@@ -50,7 +57,7 @@
       <ng-template pTemplate="title">
         <div class="master-data__panel-header">
           <h3>{{ 'masterData.lines' | translate }}</h3>
-          @if (isAdmin() && selectedSite()) {
+          @if (isAdmin() && !isReadOnly() && selectedSite()) {
             <p-button
               icon="pi pi-plus"
               [text]="true"
@@ -75,7 +82,7 @@
             <tr [class.master-data__row--selected]="selectedLine()?.id === line.id" (click)="selectLine(line)" [attr.data-testid]="'line-row-' + line.name">
               <td>{{ line.name }}</td>
               <td class="master-data__actions">
-                @if (isAdmin()) {
+                @if (isAdmin() && !isReadOnly()) {
                   <p-button icon="pi pi-pencil" [text]="true" (click)="$event.stopPropagation(); openEdit('line', line.id, line.name)" data-testid="edit-line-btn" />
                   <p-button icon="pi pi-trash" [text]="true" severity="danger" (click)="$event.stopPropagation(); deleteLine(line)" data-testid="delete-line-btn" />
                 }
@@ -90,7 +97,7 @@
       <ng-template pTemplate="title">
         <div class="master-data__panel-header">
           <h3>{{ 'masterData.machines' | translate }}</h3>
-          @if (isAdmin() && selectedLine()) {
+          @if (isAdmin() && !isReadOnly() && selectedLine()) {
             <p-button
               icon="pi pi-plus"
               [text]="true"
@@ -115,7 +122,7 @@
             <tr [attr.data-testid]="'machine-row-' + machine.name">
               <td>{{ machine.name }}</td>
               <td class="master-data__actions">
-                @if (isAdmin()) {
+                @if (isAdmin() && !isReadOnly()) {
                   <p-button icon="pi pi-pencil" [text]="true" (click)="openEdit('machine', machine.id, machine.name)" data-testid="edit-machine-btn" />
                   <p-button icon="pi pi-trash" [text]="true" severity="danger" (click)="deleteMachine(machine)" data-testid="delete-machine-btn" />
                 }
@@ -131,7 +138,7 @@
     <ng-template pTemplate="title">
       <div class="master-data__panel-header">
         <h3>{{ 'masterData.shiftSchedules' | translate }}</h3>
-        @if (isAdmin() && selectedSite()) {
+        @if (isAdmin() && !isReadOnly() && selectedSite()) {
           <p-button
             icon="pi pi-plus"
             [text]="true"
@@ -162,7 +169,7 @@
             <td>{{ shift.startTime.slice(0, 5) }}</td>
             <td>{{ shift.endTime.slice(0, 5) }}</td>
             <td class="master-data__actions">
-              @if (isAdmin()) {
+              @if (isAdmin() && !isReadOnly()) {
                 <p-button icon="pi pi-pencil" [text]="true" (click)="openEditShift(shift)" data-testid="edit-shift-btn" />
                 <p-button icon="pi pi-trash" [text]="true" severity="danger" (click)="deleteShift(shift)" data-testid="delete-shift-btn" />
               }
@@ -177,7 +184,7 @@
     <ng-template pTemplate="title">
       <div class="master-data__panel-header">
         <h3>{{ 'masterData.reasonCodes' | translate }}</h3>
-        @if (isAdmin() && selectedSite()) {
+        @if (isAdmin() && !isReadOnly() && selectedSite()) {
           <p-button
             icon="pi pi-plus"
             [text]="true"
@@ -206,7 +213,7 @@
             <td>{{ ('masterData.lossCategory.' + reasonCode.lossCategory) | translate }}</td>
             <td>{{ (reasonCode.isActive ? 'masterData.active' : 'masterData.inactive') | translate }}</td>
             <td class="master-data__actions">
-              @if (isAdmin() && reasonCode.isActive) {
+              @if (isAdmin() && !isReadOnly() && reasonCode.isActive) {
                 <p-button
                   icon="pi pi-eye-slash"
                   [text]="true"
@@ -215,7 +222,7 @@
                   data-testid="deactivate-reason-code-btn"
                 />
               }
-              @if (isAdmin()) {
+              @if (isAdmin() && !isReadOnly()) {
                 <p-button icon="pi pi-trash" [text]="true" severity="danger" (click)="deleteReasonCode(reasonCode)" data-testid="delete-reason-code-btn" />
               }
             </td>
@@ -290,6 +297,7 @@
           optionValue="id"
           [ngModel]="shiftDialogLineId()"
           (ngModelChange)="shiftDialogLineId.set($event)"
+          appendTo="body"
           data-testid="shift-line-select"
         />
       </div>
@@ -355,6 +363,7 @@
           optionValue="value"
           [ngModel]="reasonDialogLossCategory()"
           (ngModelChange)="reasonDialogLossCategory.set($event)"
+          appendTo="body"
           data-testid="reason-code-loss-category-select"
         >
           <ng-template let-option pTemplate="item">{{ option.labelKey | translate }}</ng-template>
@@ -440,6 +449,7 @@
           optionValue="value"
           [ngModel]="userDialogRole()"
           (ngModelChange)="onUserRoleChange($event)"
+          appendTo="body"
           data-testid="user-role-select"
         >
           <ng-template let-option pTemplate="item">{{ option.labelKey | translate }}</ng-template>
@@ -457,6 +467,7 @@
             optionValue="id"
             [ngModel]="userDialogSiteIds()"
             (ngModelChange)="onUserSiteIdsChange($event)"
+            appendTo="body"
             data-testid="user-sites-select"
           />
         </div>
@@ -471,6 +482,7 @@
               optionValue="id"
               [ngModel]="userDialogLineIds()"
               (ngModelChange)="userDialogLineIds.set($event)"
+              appendTo="body"
               data-testid="user-lines-select"
             />
           </div>

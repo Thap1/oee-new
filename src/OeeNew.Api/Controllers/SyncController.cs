@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OeeNew.Api.Sync;
+using OeeNew.Application;
 using OeeNew.Application.Sync;
 
 namespace OeeNew.Api.Controllers;
@@ -19,7 +20,7 @@ public sealed class SyncController(ReceiveSyncBatchUseCase useCase, AppModeInfo 
     [HttpPost("batch")]
     public async Task<IActionResult> ReceiveBatch([FromBody] SyncBatch batch, CancellationToken cancellationToken)
     {
-        if (appMode.Mode != "Central")
+        if (!appMode.IsCentral)
         {
             // This instance isn't a Central instance — never silently accept a payload it has no reason to store.
             return NotFound();

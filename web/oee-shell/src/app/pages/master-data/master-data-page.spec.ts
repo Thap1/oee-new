@@ -59,7 +59,7 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-async function setUp(role: string) {
+async function setUp(role: string, appMode: 'Site' | 'Central' = 'Site', sites: unknown[] = [{ id: 'site-1', name: 'Site A', openAtUrl: null }]) {
   localStorage.setItem('oee_access_token', fakeJwt({ sub: '1', role }));
 
   TestBed.configureTestingModule({
@@ -77,7 +77,8 @@ async function setUp(role: string) {
   fixture.detectChanges();
 
   httpMock.expectOne('/i18n/vi.json').flush(I18N_VI);
-  httpMock.expectOne('/api/master-data/sites').flush([{ id: 'site-1', name: 'Site A' }]);
+  httpMock.expectOne('/api/app-mode').flush({ mode: appMode });
+  httpMock.expectOne('/api/master-data/sites').flush(sites);
   if (role === 'Admin') {
     httpMock.expectOne('/api/users').flush([]);
   }
@@ -127,11 +128,11 @@ describe('MasterDataPage', () => {
     const req = httpMock.expectOne('/api/master-data/sites');
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ name: 'Site B' });
-    req.flush({ id: 'site-2', name: 'Site B' });
+    req.flush({ id: 'site-2', name: 'Site B', openAtUrl: null });
     await savePromise;
     fixture.detectChanges();
 
-    expect(component.sites()).toContainEqual({ id: 'site-2', name: 'Site B' });
+    expect(component.sites()).toContainEqual({ id: 'site-2', name: 'Site B', openAtUrl: null });
     expect(component.dialog().visible).toBe(false);
 
     httpMock.verify();
@@ -143,7 +144,7 @@ describe('MasterDataPage', () => {
     const originalConfirm = window.confirm;
     window.confirm = () => true;
 
-    const deletePromise = component.deleteSite({ id: 'site-1', name: 'Site A' });
+    const deletePromise = component.deleteSite({ id: 'site-1', name: 'Site A', openAtUrl: null });
 
     const req = httpMock.expectOne('/api/master-data/sites/site-1');
     expect(req.request.method).toBe('DELETE');
@@ -155,7 +156,7 @@ describe('MasterDataPage', () => {
     fixture.detectChanges();
 
     expect(component.error()).toContain('Line A');
-    expect(component.sites()).toContainEqual({ id: 'site-1', name: 'Site A' });
+    expect(component.sites()).toContainEqual({ id: 'site-1', name: 'Site A', openAtUrl: null });
 
     window.confirm = originalConfirm;
     httpMock.verify();
@@ -165,7 +166,7 @@ describe('MasterDataPage', () => {
     const { fixture, httpMock } = await setUp('Admin');
     const component = fixture.componentInstance;
 
-    const selectPromise = component.selectSite({ id: 'site-1', name: 'Site A' });
+    const selectPromise = component.selectSite({ id: 'site-1', name: 'Site A', openAtUrl: null });
 
     httpMock.expectOne('/api/master-data/sites/site-1/lines').flush([]);
     httpMock
@@ -186,7 +187,7 @@ describe('MasterDataPage', () => {
     const { fixture, httpMock } = await setUp('Admin');
     const component = fixture.componentInstance;
 
-    const selectPromise = component.selectSite({ id: 'site-1', name: 'Site A' });
+    const selectPromise = component.selectSite({ id: 'site-1', name: 'Site A', openAtUrl: null });
     httpMock.expectOne('/api/master-data/sites/site-1/lines').flush([]);
     httpMock.expectOne('/api/master-data/sites/site-1/shift-schedules').flush([]);
     httpMock.expectOne('/api/master-data/sites/site-1/reason-codes').flush([]);
@@ -223,7 +224,7 @@ describe('MasterDataPage', () => {
     const { fixture, httpMock } = await setUp('Admin');
     const component = fixture.componentInstance;
 
-    const selectPromise = component.selectSite({ id: 'site-1', name: 'Site A' });
+    const selectPromise = component.selectSite({ id: 'site-1', name: 'Site A', openAtUrl: null });
     httpMock.expectOne('/api/master-data/sites/site-1/lines').flush([]);
     httpMock.expectOne('/api/master-data/sites/site-1/shift-schedules').flush([]);
     httpMock.expectOne('/api/master-data/sites/site-1/reason-codes').flush([]);
@@ -271,9 +272,9 @@ describe('MasterDataPage', () => {
     const originalConfirm = window.confirm;
     window.confirm = () => true;
 
-    const selectPromise = component.selectSite({ id: 'site-1', name: 'Site A' });
+    const selectPromise = component.selectSite({ id: 'site-1', name: 'Site A', openAtUrl: null });
 
-    const deletePromise = component.deleteSite({ id: 'site-1', name: 'Site A' });
+    const deletePromise = component.deleteSite({ id: 'site-1', name: 'Site A', openAtUrl: null });
     const deleteReq = httpMock.expectOne('/api/master-data/sites/site-1');
     expect(deleteReq.request.method).toBe('DELETE');
     deleteReq.flush(null, { status: 204, statusText: 'No Content' });
@@ -301,7 +302,7 @@ describe('MasterDataPage', () => {
     const { fixture, httpMock } = await setUp('Admin');
     const component = fixture.componentInstance;
 
-    const selectPromise = component.selectSite({ id: 'site-1', name: 'Site A' });
+    const selectPromise = component.selectSite({ id: 'site-1', name: 'Site A', openAtUrl: null });
     httpMock.expectOne('/api/master-data/sites/site-1/lines').flush([]);
     httpMock.expectOne('/api/master-data/sites/site-1/shift-schedules').flush([]);
     httpMock.expectOne('/api/master-data/sites/site-1/reason-codes').flush([]);
@@ -335,7 +336,7 @@ describe('MasterDataPage', () => {
     const { fixture, httpMock } = await setUp('Admin');
     const component = fixture.componentInstance;
 
-    const selectPromise = component.selectSite({ id: 'site-1', name: 'Site A' });
+    const selectPromise = component.selectSite({ id: 'site-1', name: 'Site A', openAtUrl: null });
     httpMock.expectOne('/api/master-data/sites/site-1/lines').flush([]);
     httpMock.expectOne('/api/master-data/sites/site-1/shift-schedules').flush([]);
     httpMock

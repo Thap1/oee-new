@@ -4,7 +4,7 @@ baseline_commit: f1932b2a23563d7141903e5b8b55da9b8f9ca004
 
 # Story 5.1: Đồng bộ dữ liệu site lên trung tâm
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -23,12 +23,12 @@ so that I can view cross-site aggregated data without depending on constant site
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Resolve AC #1's stale "ProductionCount" wording against what the codebase actually has (AC: #1)
-  - [ ] **Read `src/OeeNew.Application/Reports/OeeReportQueryUseCase.cs`'s class doc comment before writing any sync code.** It already states, in Story 4.1's own words: *"there is no ProductionCount/ideal-cycle-time entity anywhere in the codebase... this reuses exactly the same 'seconds lost per LossCategory' data Epic 3's `LossBreakdownQueryUseCase` already established."* `ProductionCount` is a name the Architecture Spine/epics.md coined when Epic 5 was scoped, but Epic 2/3/4 never built it — OEE here is a **time-based-loss proxy** over `DowntimeEvent`+`QualityReject`, confirmed with the user (see memory `epic4_oee_report_decisions`). Do not create a new `ProductionCount` entity/table in this story — that would be new scope nothing in Epic 2-4 asked for and nothing downstream (reports, pie chart) would consume.
-  - [ ] `[ASSUMPTION]` this story's sync scope is exactly the two business-record entities that exist and are described as "closed"/"per record" in AD-2: `DowntimeEvent` (only rows with `EndedAt != null` — an open event is not yet a finished business record) and `QualityReject` (every row — it's already append-only, Story 2.6 Dev Notes). Plus, per AD-4, the master data these two reference: `Site`, `Line`, `Machine`, `ReasonCode`.
-- [ ] Task 2: Site-side — sync cursor storage, so a push cycle knows what's new since last success (AC: #1, #2)
-  - [ ] New Domain-free table `SyncCursor` (single row, `Id smallint PRIMARY KEY DEFAULT 1`, `LastPushedAt timestamptz NULL`) — deliberately a plain infrastructure/runtime-state table, not a Domain entity (same reasoning `MachineState` vs `Machine` already split runtime state from master-data identity). Map directly via EF Core in `OeeDbContext` as a simple class `SyncCursorRow { public short Id; public DateTimeOffset? LastPushedAt; }` — no rich Domain type needed, this is pure infrastructure bookkeeping, not a business rule–bearing entity.
-  - [ ] New file `src/OeeNew.Application/Sync/ISyncCursorStore.cs`:
+- [x] Task 1: Resolve AC #1's stale "ProductionCount" wording against what the codebase actually has (AC: #1)
+  - [x] **Read `src/OeeNew.Application/Reports/OeeReportQueryUseCase.cs`'s class doc comment before writing any sync code.** It already states, in Story 4.1's own words: *"there is no ProductionCount/ideal-cycle-time entity anywhere in the codebase... this reuses exactly the same 'seconds lost per LossCategory' data Epic 3's `LossBreakdownQueryUseCase` already established."* `ProductionCount` is a name the Architecture Spine/epics.md coined when Epic 5 was scoped, but Epic 2/3/4 never built it — OEE here is a **time-based-loss proxy** over `DowntimeEvent`+`QualityReject`, confirmed with the user (see memory `epic4_oee_report_decisions`). Do not create a new `ProductionCount` entity/table in this story — that would be new scope nothing in Epic 2-4 asked for and nothing downstream (reports, pie chart) would consume.
+  - [x] `[ASSUMPTION]` this story's sync scope is exactly the two business-record entities that exist and are described as "closed"/"per record" in AD-2: `DowntimeEvent` (only rows with `EndedAt != null` — an open event is not yet a finished business record) and `QualityReject` (every row — it's already append-only, Story 2.6 Dev Notes). Plus, per AD-4, the master data these two reference: `Site`, `Line`, `Machine`, `ReasonCode`.
+- [x] Task 2: Site-side — sync cursor storage, so a push cycle knows what's new since last success (AC: #1, #2)
+  - [x] New Domain-free table `SyncCursor` (single row, `Id smallint PRIMARY KEY DEFAULT 1`, `LastPushedAt timestamptz NULL`) — deliberately a plain infrastructure/runtime-state table, not a Domain entity (same reasoning `MachineState` vs `Machine` already split runtime state from master-data identity). Map directly via EF Core in `OeeDbContext` as a simple class `SyncCursorRow { public short Id; public DateTimeOffset? LastPushedAt; }` — no rich Domain type needed, this is pure infrastructure bookkeeping, not a business rule–bearing entity.
+  - [x] New file `src/OeeNew.Application/Sync/ISyncCursorStore.cs`:
     ```csharp
     public interface ISyncCursorStore
     {
@@ -36,10 +36,10 @@ so that I can view cross-site aggregated data without depending on constant site
         Task SetLastPushedAtAsync(DateTimeOffset value, CancellationToken cancellationToken = default);
     }
     ```
-  - [ ] New file `src/OeeNew.Infrastructure/Persistence/SyncCursorStore.cs` implementing it against `OeeDbContext` (upsert the single row by `Id = 1`).
-  - [ ] **Why a single-row cursor instead of a "SyncedAt" flag column on `DowntimeEvent`/`QualityReject`:** adding a synced-marker column to those two tables would touch Epic 2's hot ingestion path and its existing EF mappings/tests for no real benefit — a single timestamp cursor plus an idempotent upsert at Central (Task 6) gives the same at-least-once-delivery safety with a much smaller footprint. `[ASSUMPTION]`, since the Architecture Spine's Deferred section explicitly left "cơ chế Sync module" unspecified.
-- [ ] Task 3: Site-side — gather-and-push use case (AC: #1, #2, #3)
-  - [ ] New file `src/OeeNew.Application/Sync/SyncBatch.cs` — the wire contract shared by both sides of the sync HTTP call (Site serializes it, Central deserializes the identical shape — same binary, no drift possible):
+  - [x] New file `src/OeeNew.Infrastructure/Persistence/SyncCursorStore.cs` implementing it against `OeeDbContext` (upsert the single row by `Id = 1`).
+  - [x] **Why a single-row cursor instead of a "SyncedAt" flag column on `DowntimeEvent`/`QualityReject`:** adding a synced-marker column to those two tables would touch Epic 2's hot ingestion path and its existing EF mappings/tests for no real benefit — a single timestamp cursor plus an idempotent upsert at Central (Task 6) gives the same at-least-once-delivery safety with a much smaller footprint. `[ASSUMPTION]`, since the Architecture Spine's Deferred section explicitly left "cơ chế Sync module" unspecified.
+- [x] Task 3: Site-side — gather-and-push use case (AC: #1, #2, #3)
+  - [x] New file `src/OeeNew.Application/Sync/SyncBatch.cs` — the wire contract shared by both sides of the sync HTTP call (Site serializes it, Central deserializes the identical shape — same binary, no drift possible):
     ```csharp
     public sealed record SyncSiteRecord(Guid Id, string Name);
     public sealed record SyncLineRecord(Guid Id, string Name, Guid SiteId);
@@ -57,8 +57,8 @@ so that I can view cross-site aggregated data without depending on constant site
         IReadOnlyList<SyncQualityRejectRecord> QualityRejects);
     ```
     Plain data records in `Application` (same pattern as `ClosedDowntimeSlice` — a read-only projection type Application defines and both Infrastructure and Api reference), not the actual Domain entities — never serialize `Domain.MasterData.Site` etc. directly over HTTP.
-  - [ ] `[ASSUMPTION]` **master data is resent as a full current snapshot every cycle, not diffed.** `Site`/`Line`/`Machine`/`ReasonCode` are small tables (tens to low hundreds of rows for a real factory) — resending everything each cycle is cheap and sidesteps needing change-tracking (`UpdatedAt` columns, dirty flags) on four tables that Epic 1 never designed for it. Only `DowntimeEvent`/`QualityReject` use the cursor (Task 2) to send just what's new, since those can grow unbounded.
-  - [ ] New file `src/OeeNew.Application/Sync/ISyncClient.cs` (name matches the Architecture Spine's source-tree comment: *"interface cho Infrastructure (IProductionDataSource, ISyncClient...)"*):
+  - [x] `[ASSUMPTION]` **master data is resent as a full current snapshot every cycle, not diffed.** `Site`/`Line`/`Machine`/`ReasonCode` are small tables (tens to low hundreds of rows for a real factory) — resending everything each cycle is cheap and sidesteps needing change-tracking (`UpdatedAt` columns, dirty flags) on four tables that Epic 1 never designed for it. Only `DowntimeEvent`/`QualityReject` use the cursor (Task 2) to send just what's new, since those can grow unbounded.
+  - [x] New file `src/OeeNew.Application/Sync/ISyncClient.cs` (name matches the Architecture Spine's source-tree comment: *"interface cho Infrastructure (IProductionDataSource, ISyncClient...)"*):
     ```csharp
     public interface ISyncClient
     {
@@ -66,7 +66,7 @@ so that I can view cross-site aggregated data without depending on constant site
         Task<bool> TryPushAsync(SyncBatch batch, CancellationToken cancellationToken = default);
     }
     ```
-  - [ ] New file `src/OeeNew.Application/Sync/PushSyncBatchUseCase.cs`, constructor `(ISiteRepository sites, ILineRepository lines, IMachineRepository machines, IReasonCodeRepository reasonCodes, IDowntimeEventRepository downtimeEvents, IQualityRejectRepository qualityRejects, ISyncClient syncClient, ISyncCursorStore cursorStore)`:
+  - [x] New file `src/OeeNew.Application/Sync/PushSyncBatchUseCase.cs`, constructor `(ISiteRepository sites, ILineRepository lines, IMachineRepository machines, IReasonCodeRepository reasonCodes, IDowntimeEventRepository downtimeEvents, IQualityRejectRepository qualityRejects, ISyncClient syncClient, ISyncCursorStore cursorStore)`:
     ```csharp
     public async Task<bool> RunOnceAsync(CancellationToken cancellationToken = default)
     {
@@ -89,11 +89,11 @@ so that I can view cross-site aggregated data without depending on constant site
     }
     ```
     **Capture `cycleStartedAt` before querying, and advance the cursor to that captured value (not `DateTimeOffset.UtcNow` read again after the push)** — otherwise a `DowntimeEvent` that closes between the query and the cursor update would be silently skipped forever (never `>= since` on any future cycle once the cursor moves past it).
-  - [ ] `ILineRepository`/`IMachineRepository`/`IReasonCodeRepository` already have a `ListAsync`/`ListByScopeAsync`-style "everything" method (mirror whichever one `SiteRepository.ListAsync()` (`src/OeeNew.Infrastructure/Persistence/SiteRepository.cs`) already establishes as the "no scope filter, just all rows in this local DB" pattern) — reuse them, don't add new query methods for the full-snapshot reads.
-- [ ] Task 4: Site-side — periodic background push, opt-in like `DemoSignalSimulatorHostedService` (AC: #1, #2)
-  - [ ] New file `src/OeeNew.Infrastructure/Sync/SyncOptions.cs`: `public sealed class SyncOptions { public const string SectionName = "Sync"; public bool Enabled { get; set; } public string? CentralBaseUrl { get; set; } public string? ApiKey { get; set; } public int IntervalSeconds { get; set; } = 60; }` — same options-class shape as `ProductionOptions`/`JwtOptions`.
-  - [ ] New file `src/OeeNew.Infrastructure/Sync/SyncPushHostedService.cs` — copy `DemoSignalSimulatorHostedService`'s exact shape (`BackgroundService`, `IServiceScopeFactory` + `PeriodicTimer`, one scope per tick, resolve `PushSyncBatchUseCase` inside the scope): on each tick call `RunOnceAsync`; **log and continue on any exception/false return — never let a failed push crash the loop** (this is the concrete mechanism behind AC #2's "site vẫn tiếp tục vận hành đầy đủ").
-  - [ ] `src/OeeNew.Api/Program.cs`: `builder.Services.Configure<SyncOptions>(builder.Configuration.GetSection(SyncOptions.SectionName));` alongside the other `Configure<...Options>` calls (line ~45). Register `SyncPushHostedService` **only when both `appMode == "Site"` and `Sync:Enabled` is true**:
+  - [x] `ILineRepository`/`IMachineRepository`/`IReasonCodeRepository` already have a `ListAsync`/`ListByScopeAsync`-style "everything" method (mirror whichever one `SiteRepository.ListAsync()` (`src/OeeNew.Infrastructure/Persistence/SiteRepository.cs`) already establishes as the "no scope filter, just all rows in this local DB" pattern) — reuse them, don't add new query methods for the full-snapshot reads.
+- [x] Task 4: Site-side — periodic background push, opt-in like `DemoSignalSimulatorHostedService` (AC: #1, #2)
+  - [x] New file `src/OeeNew.Infrastructure/Sync/SyncOptions.cs`: `public sealed class SyncOptions { public const string SectionName = "Sync"; public bool Enabled { get; set; } public string? CentralBaseUrl { get; set; } public string? ApiKey { get; set; } public int IntervalSeconds { get; set; } = 60; }` — same options-class shape as `ProductionOptions`/`JwtOptions`.
+  - [x] New file `src/OeeNew.Infrastructure/Sync/SyncPushHostedService.cs` — copy `DemoSignalSimulatorHostedService`'s exact shape (`BackgroundService`, `IServiceScopeFactory` + `PeriodicTimer`, one scope per tick, resolve `PushSyncBatchUseCase` inside the scope): on each tick call `RunOnceAsync`; **log and continue on any exception/false return — never let a failed push crash the loop** (this is the concrete mechanism behind AC #2's "site vẫn tiếp tục vận hành đầy đủ").
+  - [x] `src/OeeNew.Api/Program.cs`: `builder.Services.Configure<SyncOptions>(builder.Configuration.GetSection(SyncOptions.SectionName));` alongside the other `Configure<...Options>` calls (line ~45). Register `SyncPushHostedService` **only when both `appMode == "Site"` and `Sync:Enabled` is true**:
     ```csharp
     if (appMode == "Site" && builder.Configuration.GetValue<bool>("Sync:Enabled"))
     {
@@ -104,27 +104,27 @@ so that I can view cross-site aggregated data without depending on constant site
     }
     ```
     Opt-in (default `false`) for the same reason `Production:SimulateSignal` is opt-in: most dev/demo runs are a single standalone instance with no Central counterpart reachable — don't spin up a background loop that immediately fails every tick against a placeholder `CentralBaseUrl`.
-  - [ ] New file `src/OeeNew.Infrastructure/Sync/HttpSyncClient.cs` implementing `ISyncClient` via injected `HttpClient` (base address = `SyncOptions.CentralBaseUrl`, `IOptions<SyncOptions>` for the API key): `POST {CentralBaseUrl}/api/sync/batch` with header `X-Sync-Api-Key: {ApiKey}` and the `SyncBatch` as JSON body. Catch `HttpRequestException`/non-2xx and return `false` (AC #2 — never throw out of this method).
-- [ ] Task 5: Site-side repository extensions — "what changed since the cursor" (AC: #1)
-  - [ ] `src/OeeNew.Application/Production/IDowntimeEventRepository.cs`: add
+  - [x] New file `src/OeeNew.Infrastructure/Sync/HttpSyncClient.cs` implementing `ISyncClient` via injected `HttpClient` (base address = `SyncOptions.CentralBaseUrl`, `IOptions<SyncOptions>` for the API key): `POST {CentralBaseUrl}/api/sync/batch` with header `X-Sync-Api-Key: {ApiKey}` and the `SyncBatch` as JSON body. Catch `HttpRequestException`/non-2xx and return `false` (AC #2 — never throw out of this method).
+- [x] Task 5: Site-side repository extensions — "what changed since the cursor" (AC: #1)
+  - [x] `src/OeeNew.Application/Production/IDowntimeEventRepository.cs`: add
     ```csharp
     /// <summary>Closed events (EndedAt != null) whose EndedAt falls in (since, asOf] — the Sync module's "what's new" query (Story 5.1). Unlike ListClosedSlicesInRangeAsync, returns full entities (ReasonCodeId/StartedAt/EndedAt all needed on the wire), not the ClosedDowntimeSlice projection, and is NOT scoped to a machine list — sync pushes everything this local DB has.</summary>
     Task<IReadOnlyList<DowntimeEvent>> ListClosedSince(DateTimeOffset since, DateTimeOffset asOf, CancellationToken cancellationToken = default);
     ```
     Implement in `DowntimeEventRepository.cs` filtering `e.EndedAt != null && e.EndedAt > since && e.EndedAt <= asOf`.
-  - [ ] `src/OeeNew.Application/Production/IQualityRejectRepository.cs`: add `Task<IReadOnlyList<QualityReject>> ListRecordedSince(DateTimeOffset since, DateTimeOffset asOf, CancellationToken cancellationToken = default)`, filtering `RecordedAt > since && RecordedAt <= asOf`.
-  - [ ] Update both fake test doubles (`tests/OeeNew.Application.Tests/Production/FakeDowntimeEventRepository.cs`, `FakeQualityRejectRepository.cs`) with the new methods.
-- [ ] Task 6: Central-side — receive endpoint, idempotent upsert, AppMode guard (AC: #3, #4)
-  - [ ] New file `src/OeeNew.Application/Sync/ISyncIngestRepository.cs`: `Task IngestAsync(SyncBatch batch, CancellationToken cancellationToken = default);` — one call, one DB transaction.
-  - [ ] New file `src/OeeNew.Application/Sync/ISyncStatusRepository.cs`: `Task RecordSyncedAsync(Guid siteId, DateTimeOffset syncedAt, CancellationToken cancellationToken = default);` (read side — listing statuses for the badge — is Story 5.3's concern; this story only needs the write path that a successful ingest calls).
-  - [ ] New file `src/OeeNew.Application/Sync/ReceiveSyncBatchUseCase.cs`: `IngestAsync(SyncBatch batch, ct)` → calls `ISyncIngestRepository.IngestAsync` then, **for every `SyncSiteRecord` in the batch** (not a single "calling site id" — see Dev Notes on why), `ISyncStatusRepository.RecordSyncedAsync(site.Id, DateTimeOffset.UtcNow, ct)`.
-  - [ ] New file `src/OeeNew.Infrastructure/Persistence/SyncIngestRepository.cs` implementing `ISyncIngestRepository` against `OeeDbContext`, in FK-dependency order (Site → Line → Machine → ReasonCode → DowntimeEvent/QualityReject) inside one `context.Database.BeginTransactionAsync()`:
+  - [x] `src/OeeNew.Application/Production/IQualityRejectRepository.cs`: add `Task<IReadOnlyList<QualityReject>> ListRecordedSince(DateTimeOffset since, DateTimeOffset asOf, CancellationToken cancellationToken = default)`, filtering `RecordedAt > since && RecordedAt <= asOf`.
+  - [x] Update both fake test doubles (`tests/OeeNew.Application.Tests/Production/FakeDowntimeEventRepository.cs`, `FakeQualityRejectRepository.cs`) with the new methods.
+- [x] Task 6: Central-side — receive endpoint, idempotent upsert, AppMode guard (AC: #3, #4)
+  - [x] New file `src/OeeNew.Application/Sync/ISyncIngestRepository.cs`: `Task IngestAsync(SyncBatch batch, CancellationToken cancellationToken = default);` — one call, one DB transaction.
+  - [x] New file `src/OeeNew.Application/Sync/ISyncStatusRepository.cs`: `Task RecordSyncedAsync(Guid siteId, DateTimeOffset syncedAt, CancellationToken cancellationToken = default);` (read side — listing statuses for the badge — is Story 5.3's concern; this story only needs the write path that a successful ingest calls).
+  - [x] New file `src/OeeNew.Application/Sync/ReceiveSyncBatchUseCase.cs`: `IngestAsync(SyncBatch batch, ct)` → calls `ISyncIngestRepository.IngestAsync` then, **for every `SyncSiteRecord` in the batch** (not a single "calling site id" — see Dev Notes on why), `ISyncStatusRepository.RecordSyncedAsync(site.Id, DateTimeOffset.UtcNow, ct)`.
+  - [x] New file `src/OeeNew.Infrastructure/Persistence/SyncIngestRepository.cs` implementing `ISyncIngestRepository` against `OeeDbContext`, in FK-dependency order (Site → Line → Machine → ReasonCode → DowntimeEvent/QualityReject) inside one `context.Database.BeginTransactionAsync()`:
     - For each master-data record: `var existing = await context.Sites.FindAsync([id], ct);` — if found, call the entity's existing mutator (`Site.Rename(name)`, `Line.Rename(name)`, `Machine.Rename(name)`; for `ReasonCode`, only `Name` and `Deactivate()`-when-`!IsActive` are applied — see Dev Notes' known gap) and let `SaveChanges` emit the `UPDATE`; if not found, `Add(new Site(id, name))` (same pattern for Line/Machine/ReasonCode's constructors).
     - **Trust EF Core's existing `ValueGeneratedOnAdd()` + `HasDefaultValueSql("uuidv7()")` configuration (`OeeDbContext.cs` — same config already in place for every synced entity) to preserve the client-supplied `Id` on `Add`**: that configuration only asks Postgres to generate a value when the CLR property is left at its type default (`Guid.Empty`); since every incoming record already carries a real, non-empty `Id` minted at the origin site (AD-6), a plain `Add(new Site(id, name))` inserts with that exact `Id` — do not bypass this with raw SQL upserts, and do not "fix" the mapping thinking it will silently regenerate the key.
     - For `DowntimeEvent`/`QualityReject`: **insert-only, skip if the `Id` already exists** (`await context.DowntimeEvents.AnyAsync(d => d.Id == record.Id, ct)`) — these are immutable closed business records once synced, so re-delivery after a retried push (AC #2's failure-and-retry path) must be a no-op, not a duplicate or an error. Reconstruct via the existing Domain API, don't add new constructors: `new DowntimeEvent(record.Id, record.MachineId, record.StartedAt)`, then `.AssignReason(reasonCodeId)` if present (call before `.Close`, since `AssignReason` throws once `!IsOpen`), then `.Close(record.EndedAt)`.
-  - [ ] New file `src/OeeNew.Infrastructure/Persistence/SyncStatusRepository.cs` implementing `ISyncStatusRepository` — upsert a `SiteSyncStatus(SiteId, LastSyncedAt)` row (same find-or-add shape as the master-data upserts above).
-  - [ ] New file `src/OeeNew.Api/Sync/ApiKeyAuthFilter.cs` — a plain `IAsyncActionFilter` (not a new ASP.NET authentication scheme; the existing JWT Bearer scheme stays the sole `[Authorize]`-based mechanism for user-facing endpoints) that reads the `X-Sync-Api-Key` header and compares it (constant-time, `CryptographicOperations.FixedTimeEquals`) against `IOptions<SyncOptions>.Value.ApiKey`; short-circuits with the standard `{ code: "UNAUTHORIZED", message }` envelope (`ApiErrorWriter`, matching every other 401 path in this codebase) on mismatch or missing header.
-  - [ ] New file `src/OeeNew.Api/Controllers/SyncController.cs`:
+  - [x] New file `src/OeeNew.Infrastructure/Persistence/SyncStatusRepository.cs` implementing `ISyncStatusRepository` — upsert a `SiteSyncStatus(SiteId, LastSyncedAt)` row (same find-or-add shape as the master-data upserts above).
+  - [x] New file `src/OeeNew.Api/Sync/ApiKeyAuthFilter.cs` — a plain `IAsyncActionFilter` (not a new ASP.NET authentication scheme; the existing JWT Bearer scheme stays the sole `[Authorize]`-based mechanism for user-facing endpoints) that reads the `X-Sync-Api-Key` header and compares it (constant-time, `CryptographicOperations.FixedTimeEquals`) against `IOptions<SyncOptions>.Value.ApiKey`; short-circuits with the standard `{ code: "UNAUTHORIZED", message }` envelope (`ApiErrorWriter`, matching every other 401 path in this codebase) on mismatch or missing header.
+  - [x] New file `src/OeeNew.Api/Controllers/SyncController.cs`:
     ```csharp
     [ApiController]
     [Route("api/sync")]
@@ -145,17 +145,17 @@ so that I can view cross-site aggregated data without depending on constant site
     }
     ```
     `AppModeInfo` is the existing singleton from `Program.cs:41` (`public sealed record AppModeInfo(string Mode)`) — reuse it directly, don't add a second mode-check mechanism.
-  - [ ] `Program.cs`: register `builder.Services.AddScoped<ISyncIngestRepository, SyncIngestRepository>(); builder.Services.AddScoped<ISyncStatusRepository, SyncStatusRepository>(); builder.Services.AddScoped<ReceiveSyncBatchUseCase>(); builder.Services.AddScoped<ApiKeyAuthFilter>();` unconditionally (both AppModes can have the controller mapped; the `appMode.Mode != "Central"` runtime check in the action is the actual guard, matching how this codebase already prefers a runtime check over conditional DI registration for cross-cutting AppMode behavior — see the existing `AppModeInfo` singleton being always registered regardless of mode).
-- [ ] Task 7: EF Core migration + schema regeneration (AC: #3, #4)
-  - [ ] `dotnet ef migrations add AddSyncTables --project src/OeeNew.Infrastructure --startup-project src/OeeNew.Api` — adds `SyncCursor` (`Id smallint PK default 1`, `LastPushedAt timestamptz NULL`) and `SiteSyncStatus` (`SiteId uuid PK`, `LastSyncedAt timestamptz NOT NULL`, FK to `Site(Id)` `ON DELETE RESTRICT` — same restrict convention as every other FK in `OeeDbContext.cs`). Both tables exist in the one shared `OeeDbContext`/migration history regardless of `AppMode` (a Site instance's DB has an always-empty `SiteSyncStatus`, Central's has an always-empty `SyncCursor` — consistent with "same schema, different active modules per AppMode" already established for this whole codebase).
-  - [ ] Regenerate `db/init/01_schema.sql`: `dotnet ef migrations script --idempotent -o db/init/01_schema.sql --project src/OeeNew.Infrastructure --startup-project src/OeeNew.Api` (same command Story `spec-demo-seed-data` used — never hand-edit this file).
-  - [ ] `db/init/02_seed.sql`: no changes needed — `SyncCursor`/`SiteSyncStatus` start empty; both AppModes' demo seed data works unchanged.
-  - [ ] Add `"Sync": { "Enabled": false }` to `src/OeeNew.Api/appsettings.json` (mirrors `Production:SimulateSignal`'s off-by-default pattern) — leave `CentralBaseUrl`/`ApiKey`/`IntervalSeconds` unset/default so a real deployment must explicitly configure them.
-- [ ] Task 8: Testing (all AC)
-  - [ ] New file `tests/OeeNew.Application.Tests/Sync/PushSyncBatchUseCaseTests.cs`: first run with no prior cursor pushes everything currently in the fake repositories; a second run after a successful push only includes a `DowntimeEvent` closed after the first run's `cycleStartedAt` (proves the cursor advances correctly and doesn't re-send already-pushed rows); `TryPushAsync` returning `false` leaves the cursor unchanged (AC #2 — nothing is marked as sent when the push itself failed).
-  - [ ] New file `tests/OeeNew.Application.Tests/Sync/ReceiveSyncBatchUseCaseTests.cs` (or a repository-level test against a fake `ISyncIngestRepository`/real EF Core via the existing Postgres test-fixture pattern, matching how `tests/OeeNew.Api.Tests/**/*EndpointsTests.cs` already do full-flow assertions): ingesting the same batch twice produces no duplicate `DowntimeEvent`/`QualityReject` rows and no error (AC #3 idempotency); a `Site`/`Line`/`Machine`/`ReasonCode` whose `Name` changed between two batches is updated in place, not duplicated (AC #4); a `DowntimeEvent` with `ReasonCodeId == null` (unattributed, Story 2.5 Dev Notes) round-trips correctly.
-  - [ ] New file `tests/OeeNew.Api.Tests/Sync/SyncEndpointsTests.cs`, real-Postgres full-flow style (matching `LossAnalyticsEndpointsTests.cs`): a request with a correct `X-Sync-Api-Key` against a `Central`-mode test host succeeds (204) and the batch's rows land in the DB; a wrong/missing key gets 401; a request against a `Site`-mode test host gets 404 regardless of the key (the `appMode.Mode != "Central"` guard); after a successful ingest, `SiteSyncStatus.LastSyncedAt` for each synced `Site.Id` is set to (approximately) now.
-  - [ ] New file `tests/OeeNew.Infrastructure.Tests`-equivalent-or-inline: since there's no separate Infrastructure test project in this repo today (confirmed — only `Domain.Tests`/`Application.Tests`/`Architecture.Tests`/`Api.Tests` exist), cover `SyncCursorStore`/`SyncIngestRepository`/`SyncStatusRepository` through the `Api.Tests` real-Postgres endpoint tests above rather than inventing a fifth test project for this story alone.
+  - [x] `Program.cs`: register `builder.Services.AddScoped<ISyncIngestRepository, SyncIngestRepository>(); builder.Services.AddScoped<ISyncStatusRepository, SyncStatusRepository>(); builder.Services.AddScoped<ReceiveSyncBatchUseCase>(); builder.Services.AddScoped<ApiKeyAuthFilter>();` unconditionally (both AppModes can have the controller mapped; the `appMode.Mode != "Central"` runtime check in the action is the actual guard, matching how this codebase already prefers a runtime check over conditional DI registration for cross-cutting AppMode behavior — see the existing `AppModeInfo` singleton being always registered regardless of mode).
+- [x] Task 7: EF Core migration + schema regeneration (AC: #3, #4)
+  - [x] `dotnet ef migrations add AddSyncTables --project src/OeeNew.Infrastructure --startup-project src/OeeNew.Api` — adds `SyncCursor` (`Id smallint PK default 1`, `LastPushedAt timestamptz NULL`) and `SiteSyncStatus` (`SiteId uuid PK`, `LastSyncedAt timestamptz NOT NULL`, FK to `Site(Id)` `ON DELETE RESTRICT` — same restrict convention as every other FK in `OeeDbContext.cs`). Both tables exist in the one shared `OeeDbContext`/migration history regardless of `AppMode` (a Site instance's DB has an always-empty `SiteSyncStatus`, Central's has an always-empty `SyncCursor` — consistent with "same schema, different active modules per AppMode" already established for this whole codebase).
+  - [x] Regenerate `db/init/01_schema.sql`: `dotnet ef migrations script --idempotent -o db/init/01_schema.sql --project src/OeeNew.Infrastructure --startup-project src/OeeNew.Api` (same command Story `spec-demo-seed-data` used — never hand-edit this file).
+  - [x] `db/init/02_seed.sql`: no changes needed — `SyncCursor`/`SiteSyncStatus` start empty; both AppModes' demo seed data works unchanged.
+  - [x] Add `"Sync": { "Enabled": false }` to `src/OeeNew.Api/appsettings.json` (mirrors `Production:SimulateSignal`'s off-by-default pattern) — leave `CentralBaseUrl`/`ApiKey`/`IntervalSeconds` unset/default so a real deployment must explicitly configure them.
+- [x] Task 8: Testing (all AC)
+  - [x] New file `tests/OeeNew.Application.Tests/Sync/PushSyncBatchUseCaseTests.cs`: first run with no prior cursor pushes everything currently in the fake repositories; a second run after a successful push only includes a `DowntimeEvent` closed after the first run's `cycleStartedAt` (proves the cursor advances correctly and doesn't re-send already-pushed rows); `TryPushAsync` returning `false` leaves the cursor unchanged (AC #2 — nothing is marked as sent when the push itself failed).
+  - [x] New file `tests/OeeNew.Application.Tests/Sync/ReceiveSyncBatchUseCaseTests.cs` (or a repository-level test against a fake `ISyncIngestRepository`/real EF Core via the existing Postgres test-fixture pattern, matching how `tests/OeeNew.Api.Tests/**/*EndpointsTests.cs` already do full-flow assertions): ingesting the same batch twice produces no duplicate `DowntimeEvent`/`QualityReject` rows and no error (AC #3 idempotency); a `Site`/`Line`/`Machine`/`ReasonCode` whose `Name` changed between two batches is updated in place, not duplicated (AC #4); a `DowntimeEvent` with `ReasonCodeId == null` (unattributed, Story 2.5 Dev Notes) round-trips correctly.
+  - [x] New file `tests/OeeNew.Api.Tests/Sync/SyncEndpointsTests.cs`, real-Postgres full-flow style (matching `LossAnalyticsEndpointsTests.cs`): a request with a correct `X-Sync-Api-Key` against a `Central`-mode test host succeeds (204) and the batch's rows land in the DB; a wrong/missing key gets 401; a request against a `Site`-mode test host gets 404 regardless of the key (the `appMode.Mode != "Central"` guard); after a successful ingest, `SiteSyncStatus.LastSyncedAt` for each synced `Site.Id` is set to (approximately) now.
+  - [x] New file `tests/OeeNew.Infrastructure.Tests`-equivalent-or-inline: since there's no separate Infrastructure test project in this repo today (confirmed — only `Domain.Tests`/`Application.Tests`/`Architecture.Tests`/`Api.Tests` exist), cover `SyncCursorStore`/`SyncIngestRepository`/`SyncStatusRepository` through the `Api.Tests` real-Postgres endpoint tests above rather than inventing a fifth test project for this story alone.
 
 ## Dev Notes
 
@@ -194,10 +194,60 @@ so that I can view cross-site aggregated data without depending on constant site
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+claude-sonnet-5
 
 ### Debug Log References
 
+None — no blocking failures. One pre-existing-pattern bug surfaced by the new integration tests: `AppModeInfo` was registered as a fixed `AddSingleton(new AppModeInfo(appMode))` instance computed from `builder.Configuration` *before* `WebApplicationFactory.Build()` runs, so a test's `ConfigureAppConfiguration` override (e.g. `AppMode=Central`) was silently ignored — the singleton's value was baked in from `appsettings.json` before the test's override was ever merged in. Fixed by switching to a lazy `AddSingleton(sp => new AppModeInfo(sp.GetRequiredService<IConfiguration>().GetValue<string>("AppMode") ?? "Site"))`, resolved on first use (post-Build), mirroring the same "read late" pattern already relied on for the DB connection string. Confirmed via `CentralSyncApiFactory`/`SiteModeSyncApiFactory` tests, which failed with 404 instead of 204 before this fix and pass after.
+
 ### Completion Notes List
 
+- Task 1 resolved as documented: no `ProductionCount` entity was created. Confirmed via `OeeReportQueryUseCase`'s existing doc comment that OEE is a time-based-loss proxy over `DowntimeEvent`+`QualityReject`; the sync batch carries exactly those two business-record types plus Site/Line/Machine/ReasonCode master data.
+- Site-side: `SyncCursorRow`/`ISyncCursorStore`/`SyncCursorStore` (single-row cursor), `PushSyncBatchUseCase` (full master-data snapshot + cursor-bounded DowntimeEvent/QualityReject), `SyncPushHostedService` (opt-in `Sync:Enabled`, mirrors `DemoSignalSimulatorHostedService`'s shape, never throws out of its tick), `HttpSyncClient` (POSTs to `api/sync/batch` with `X-Sync-Api-Key`, returns `false` — never throws — on any transport failure).
+- Central-side: `SyncController` (`AllowAnonymous` + `ApiKeyAuthFilter`, 404s if `AppModeInfo.Mode != "Central"`), `ReceiveSyncBatchUseCase` → `SyncIngestRepository` (idempotent: find-or-add for master data, insert-only-if-absent for DowntimeEvent/QualityReject, one transaction, FK order Site→Line→Machine→ReasonCode→events), `SyncStatusRepository` (upserts `SiteSyncStatus` per site actually present in the batch, not per "calling instance").
+- Known, accepted gap carried from the Domain model (not introduced by this story): `ReasonCode` exposes no `Rename()`/`Activate()`/LossCategory mutator, so an existing ReasonCode's Name/LossCategory can't be updated by a later sync, and a reactivated (previously deactivated) reason code won't re-sync as active. Only `Deactivate()` transitions apply. No Domain changes were made to close this gap, per the story's own "no Domain changes" constraint.
+- EF Core migration `AddSyncTables` adds `SyncCursor` (site-only, single row) and `SiteSyncStatus` (central-only, FK→Site RESTRICT); `db/init/01_schema.sql` regenerated via `dotnet ef migrations script --idempotent`; `db/init/02_seed.sql` left untouched as specified.
+- Full regression suite green: Domain.Tests 68, Application.Tests 162, Api.Tests 91, Architecture.Tests 2 — all passing against the real `oeenew_test` Postgres database.
+
 ### File List
+
+- src/OeeNew.Application/Sync/SyncBatch.cs
+- src/OeeNew.Application/Sync/ISyncClient.cs
+- src/OeeNew.Application/Sync/ISyncCursorStore.cs
+- src/OeeNew.Application/Sync/PushSyncBatchUseCase.cs
+- src/OeeNew.Application/Sync/ISyncIngestRepository.cs
+- src/OeeNew.Application/Sync/ISyncStatusRepository.cs
+- src/OeeNew.Application/Sync/ReceiveSyncBatchUseCase.cs
+- src/OeeNew.Application/Production/IDowntimeEventRepository.cs (modified — added `ListClosedSince`)
+- src/OeeNew.Application/Production/IQualityRejectRepository.cs (modified — added `ListRecordedSince`)
+- src/OeeNew.Infrastructure/Persistence/SyncCursorRow.cs
+- src/OeeNew.Infrastructure/Persistence/SyncCursorStore.cs
+- src/OeeNew.Infrastructure/Persistence/SiteSyncStatus.cs
+- src/OeeNew.Infrastructure/Persistence/SyncIngestRepository.cs
+- src/OeeNew.Infrastructure/Persistence/SyncStatusRepository.cs
+- src/OeeNew.Infrastructure/Persistence/DowntimeEventRepository.cs (modified — `ListClosedSince`)
+- src/OeeNew.Infrastructure/Persistence/QualityRejectRepository.cs (modified — `ListRecordedSince`)
+- src/OeeNew.Infrastructure/Persistence/OeeDbContext.cs (modified — `SyncCursor`/`SiteSyncStatuses` DbSets + mappings)
+- src/OeeNew.Infrastructure/Persistence/Migrations/20260723115827_AddSyncTables.cs (+ .Designer.cs)
+- src/OeeNew.Infrastructure/Persistence/Migrations/OeeDbContextModelSnapshot.cs (modified)
+- src/OeeNew.Infrastructure/Sync/SyncOptions.cs
+- src/OeeNew.Infrastructure/Sync/SyncPushHostedService.cs
+- src/OeeNew.Infrastructure/Sync/HttpSyncClient.cs
+- src/OeeNew.Api/Controllers/SyncController.cs
+- src/OeeNew.Api/Sync/ApiKeyAuthFilter.cs
+- src/OeeNew.Api/Program.cs (modified — Sync DI wiring, lazy `AppModeInfo` registration)
+- src/OeeNew.Api/appsettings.json (modified — `Sync:Enabled: false`)
+- db/init/01_schema.sql (regenerated)
+- tests/OeeNew.Application.Tests/Sync/PushSyncBatchUseCaseTests.cs
+- tests/OeeNew.Application.Tests/Sync/ReceiveSyncBatchUseCaseTests.cs
+- tests/OeeNew.Application.Tests/Production/FakeDowntimeEventRepository.cs (modified — `ListClosedSince`, `SeedEvent`)
+- tests/OeeNew.Application.Tests/Production/FakeQualityRejectRepository.cs (modified — `ListRecordedSince`)
+- tests/OeeNew.Api.Tests/Sync/CentralSyncApiFactory.cs
+- tests/OeeNew.Api.Tests/Sync/SiteModeSyncApiFactory.cs
+- tests/OeeNew.Api.Tests/Sync/SyncEndpointsTests.cs
+
+## Change Log
+
+| Date | Change |
+|------|--------|
+| 2026-07-23 | Implemented Story 5.1: Site→Central sync push/receive path, SyncCursor/SiteSyncStatus tables, opt-in background push loop, API-key-gated receive endpoint, idempotent ingest. Fixed a pre-existing `AppModeInfo` eager-registration issue that blocked AppMode-dependent integration testing. Status → review. |

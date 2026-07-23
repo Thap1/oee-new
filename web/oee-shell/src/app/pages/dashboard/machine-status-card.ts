@@ -35,18 +35,18 @@ const NO_SIGNAL_ICON = 'pi-ban';
   template: `
     @if (snapshot.status === null) {
       <div class="machine-status-card machine-status-card--skeleton" data-testid="machine-status-card">
-        <p-skeleton width="100%" height="148px" />
+        <p-skeleton width="100%" height="210px" />
       </div>
     } @else if (isNoSignal()) {
       <div class="machine-status-card machine-status-card--no-signal" data-testid="machine-status-card">
         <i class="pi {{ noSignalIcon }} machine-status-card__icon" aria-hidden="true"></i>
-        <div class="machine-status-card__name">{{ snapshot.machineName }}</div>
+        <div class="machine-status-card__name" [title]="snapshot.machineName">{{ snapshot.machineName }}</div>
         <div class="machine-status-card__status">{{ 'dashboard.status.noSignal' | translate: { minutes: noSignalElapsedMinutes() } }}</div>
       </div>
     } @else {
       <div [class]="cardClasses()" data-testid="machine-status-card" (click)="onClick()">
         <i class="pi {{ iconFor(snapshot.status) }} machine-status-card__icon" aria-hidden="true"></i>
-        <div class="machine-status-card__name">{{ snapshot.machineName }}</div>
+        <div class="machine-status-card__name" [title]="snapshot.machineName">{{ snapshot.machineName }}</div>
         <div class="machine-status-card__status">{{ 'dashboard.status.' + snapshot.status | translate }}</div>
         <div class="machine-status-card__actions" (click)="$event.stopPropagation()">
           <app-quality-reject-control [machineId]="snapshot.machineId" />
@@ -58,7 +58,7 @@ const NO_SIGNAL_ICON = 'pi-ban';
     `
       .machine-status-card {
         position: relative;
-        min-height: 148px;
+        min-height: 210px;
         padding: 20px 22px;
         border-radius: var(--app-card-radius, 14px);
         display: flex;
@@ -84,6 +84,11 @@ const NO_SIGNAL_ICON = 'pi-ban';
         font-weight: 700;
         line-height: 1.1;
         letter-spacing: -0.01em;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        word-break: break-word;
       }
 
       .machine-status-card__status {
@@ -129,7 +134,7 @@ const NO_SIGNAL_ICON = 'pi-ban';
       }
 
       .machine-status-card--skeleton {
-        min-height: 148px;
+        min-height: 210px;
         padding: 0;
         border-radius: var(--app-card-radius, 14px);
         overflow: hidden;

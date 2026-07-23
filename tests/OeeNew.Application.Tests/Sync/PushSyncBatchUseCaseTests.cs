@@ -100,9 +100,12 @@ public class PushSyncBatchUseCaseTests
         Assert.True(firstPushed);
         Assert.Single(syncClient.PushedBatches[0].DowntimeEvents);
 
-        // Closed strictly after the first run's captured cycleStartedAt.
-        var secondEvent = new DowntimeEvent(Guid.NewGuid(), machineId, DateTimeOffset.UtcNow.AddSeconds(1));
-        secondEvent.Close(DateTimeOffset.UtcNow.AddSeconds(2));
+        // Closed strictly after the first run's captured cycleStartedAt, but not in the future relative
+        // to wall-clock time — the second RunOnceAsync's own cycleStartedAt capture happens a moment
+        // after this line, so "now" here is guaranteed to already be <= that asOf.
+        var afterFirstRun = DateTimeOffset.UtcNow;
+        var secondEvent = new DowntimeEvent(Guid.NewGuid(), machineId, afterFirstRun);
+        secondEvent.Close(afterFirstRun);
         downtimeEvents.SeedEvent(secondEvent);
 
         var secondPushed = await useCase.RunOnceAsync();

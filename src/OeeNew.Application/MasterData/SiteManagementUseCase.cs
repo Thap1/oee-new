@@ -1,10 +1,11 @@
+using OeeNew.Application;
 using OeeNew.Application.Auth;
 using OeeNew.Domain.MasterData;
 
 namespace OeeNew.Application.MasterData;
 
 /// <summary>Create/rename/delete/list Sites (Story 1.2, AC #1, #5 — FR-011; scope-filtered per Story 1.6, AC #2/#4). Admin-only for writes, re-checked here in addition to the API-layer policy.</summary>
-public sealed class SiteManagementUseCase(ISiteRepository sites, ILineRepository lines)
+public sealed class SiteManagementUseCase(ISiteRepository sites, ILineRepository lines, AppModeInfo appMode)
 {
     public async Task<IReadOnlyList<Site>> ListAsync(CallerScope scope, CancellationToken cancellationToken = default)
     {
@@ -14,12 +15,14 @@ public sealed class SiteManagementUseCase(ISiteRepository sites, ILineRepository
 
     public Task<Site> CreateAsync(string? callerRole, string name, CancellationToken cancellationToken = default)
     {
+        MasterDataAuthorization.EnsureNotCentral(appMode);
         MasterDataAuthorization.EnsureAdmin(callerRole);
         return sites.AddAsync(new Site(Guid.Empty, name), cancellationToken);
     }
 
     public async Task<Site> RenameAsync(string? callerRole, Guid id, string name, CancellationToken cancellationToken = default)
     {
+        MasterDataAuthorization.EnsureNotCentral(appMode);
         MasterDataAuthorization.EnsureAdmin(callerRole);
         var site = await sites.GetAsync(id, cancellationToken) ?? throw new MasterDataNotFoundException("Site", id);
         site.Rename(name);
@@ -29,6 +32,7 @@ public sealed class SiteManagementUseCase(ISiteRepository sites, ILineRepository
 
     public async Task DeleteAsync(string? callerRole, Guid id, CancellationToken cancellationToken = default)
     {
+        MasterDataAuthorization.EnsureNotCentral(appMode);
         MasterDataAuthorization.EnsureAdmin(callerRole);
         var site = await sites.GetAsync(id, cancellationToken) ?? throw new MasterDataNotFoundException("Site", id);
 

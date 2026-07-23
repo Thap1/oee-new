@@ -46,4 +46,11 @@
     text-align: right;
     white-space: nowrap;
   }
+
+  &__open-at-site {
+    margin-left: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--p-primary-color, #10b981);
+    white-space: nowrap;
+  }
 }

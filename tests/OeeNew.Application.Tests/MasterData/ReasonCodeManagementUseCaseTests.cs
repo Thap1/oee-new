@@ -1,3 +1,4 @@
+using OeeNew.Application;
 using OeeNew.Application.MasterData;
 using OeeNew.Application.Tests.Production;
 using OeeNew.Domain.MasterData;
@@ -9,12 +10,13 @@ namespace OeeNew.Application.Tests.MasterData;
 public class ReasonCodeManagementUseCaseTests
 {
     private static ReasonCodeManagementUseCase CreateUseCase(
-        out FakeSiteRepository siteRepo, out FakeReasonCodeRepository reasonCodeRepo, out FakeDowntimeEventRepository downtimeEventRepo)
+        out FakeSiteRepository siteRepo, out FakeReasonCodeRepository reasonCodeRepo, out FakeDowntimeEventRepository downtimeEventRepo,
+        AppModeInfo? appMode = null)
     {
         siteRepo = new FakeSiteRepository();
         reasonCodeRepo = new FakeReasonCodeRepository();
         downtimeEventRepo = new FakeDowntimeEventRepository();
-        return new ReasonCodeManagementUseCase(reasonCodeRepo, siteRepo, downtimeEventRepo);
+        return new ReasonCodeManagementUseCase(reasonCodeRepo, siteRepo, downtimeEventRepo, appMode ?? new AppModeInfo("Site"));
     }
 
     [Fact]
@@ -124,5 +126,35 @@ public class ReasonCodeManagementUseCaseTests
         var id = reasonCodeRepo.Seed(siteId, "Changeover", LossCategory.PerformanceLoss);
 
         await Assert.ThrowsAsync<MasterDataForbiddenException>(() => useCase.DeleteAsync("Operator", id));
+    }
+
+    [Fact]
+    public async Task CreateAsync_AtCentral_ThrowsCentralReadOnly()
+    {
+        var useCase = CreateUseCase(out var siteRepo, out _, out _, new AppModeInfo("Central"));
+        var siteId = siteRepo.Seed("Site A");
+
+        await Assert.ThrowsAsync<CentralReadOnlyException>(
+            () => useCase.CreateAsync("Admin", siteId, "Changeover", LossCategory.PerformanceLoss));
+    }
+
+    [Fact]
+    public async Task DeactivateAsync_AtCentral_ThrowsCentralReadOnly()
+    {
+        var useCase = CreateUseCase(out var siteRepo, out var reasonCodeRepo, out _, new AppModeInfo("Central"));
+        var siteId = siteRepo.Seed("Site A");
+        var id = reasonCodeRepo.Seed(siteId, "Changeover", LossCategory.PerformanceLoss);
+
+        await Assert.ThrowsAsync<CentralReadOnlyException>(() => useCase.DeactivateAsync("Admin", id));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_AtCentral_ThrowsCentralReadOnly()
+    {
+        var useCase = CreateUseCase(out var siteRepo, out var reasonCodeRepo, out _, new AppModeInfo("Central"));
+        var siteId = siteRepo.Seed("Site A");
+        var id = reasonCodeRepo.Seed(siteId, "Changeover", LossCategory.PerformanceLoss);
+
+        await Assert.ThrowsAsync<CentralReadOnlyException>(() => useCase.DeleteAsync("Admin", id));
     }
 }

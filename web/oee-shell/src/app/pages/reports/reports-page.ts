@@ -1,4 +1,4 @@
-import { Component, OnInit, effect, signal, untracked } from '@angular/core';
+import { Component, OnInit, computed, effect, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { DatePicker } from 'primeng/datepicker';
@@ -69,6 +69,10 @@ import { OeeReportDto, OeeReportService, ReportFilterTargetType, ReportPeriodTyp
         }
       </div>
 
+      @if (contextHint(); as hint) {
+        <p class="reports-page__hint" data-testid="reports-context-hint">{{ hint }}</p>
+      }
+
       @if (error()) {
         <div class="reports-page__error" data-testid="reports-error">{{ 'masterData.error.generic' | translate }}</div>
       } @else if (report(); as r) {
@@ -138,6 +142,12 @@ import { OeeReportDto, OeeReportService, ReportFilterTargetType, ReportPeriodTyp
       .reports-page__top-reason {
         margin-top: 1.5rem;
       }
+
+      .reports-page__hint {
+        opacity: 0.75;
+        font-size: 0.9rem;
+        margin: -0.5rem 0 1rem;
+      }
     `,
   ],
 })
@@ -159,6 +169,21 @@ export class ReportsPage implements OnInit {
   readonly filterId = this.filterIdSignal.asReadonly();
   readonly report = this.reportSignal.asReadonly();
   readonly error = this.errorSignal.asReadonly();
+
+  /**
+   * Code-review fix: previously, picking Shift with no topbar Site selected (or Machine filter with no
+   * topbar Line selected) left the dependent dropdown silently empty with no explanation. Surfaces a
+   * guidance hint instead — distinct from `error()`, which is reserved for actual failed requests.
+   */
+  readonly contextHint = computed(() => {
+    if (this.periodTypeSignal() === 'Shift' && !this.scope.selectedSiteId()) {
+      return this.translate.instant('reports.noSiteForShift');
+    }
+    if (this.filterTypeSignal() === 'Machine' && !this.scope.selectedLineId()) {
+      return this.translate.instant('reports.noLineForMachineFilter');
+    }
+    return null;
+  });
 
   constructor(
     private readonly oeeReport: OeeReportService,

@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using OeeNew.Application.Auth;
 
 namespace OeeNew.Api.Tests.Sync;
 
@@ -20,5 +22,16 @@ public sealed class CentralSyncApiFactory : WebApplicationFactory<Program>
                 ["Sync:ApiKey"] = TestApiKey,
             });
         });
+    }
+
+    /// <summary>Mints a signed JWT for an arbitrary role against this Central-mode host, same shape as <c>MasterDataApiFactory.CreateTokenFor</c> (Story 5.2's Central-read-only endpoint tests need an Admin token here too).</summary>
+    public string CreateTokenFor(string role) => CreateTokenFor(role, siteIds: [], lineIds: []);
+
+    public string CreateTokenFor(string role, Guid[] siteIds, Guid[] lineIds)
+    {
+        using var scope = Services.CreateScope();
+        var jwtTokenService = scope.ServiceProvider.GetRequiredService<IJwtTokenService>();
+        var user = new AuthenticatedUser(Guid.NewGuid(), $"{role.ToLowerInvariant()}-user", role, SiteIds: siteIds, LineIds: lineIds);
+        return jwtTokenService.CreateToken(user).AccessToken;
     }
 }

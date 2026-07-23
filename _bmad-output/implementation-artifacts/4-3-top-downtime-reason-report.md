@@ -4,7 +4,7 @@ baseline_commit: 9ed4738da848404782bd3f29958b1547190f72a8
 
 # Story 4.3: Xem nguyên nhân dừng máy chiếm nhiều thời gian nhất
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -80,6 +80,14 @@ so that I can bring it directly into the shift handover meeting without compilin
 - [Source: src/OeeNew.Application/Analytics/LossBreakdownQueryUseCase.cs:49-81] — `GetReasonBreakdownAsync`, the closest existing precedent for "group closed slices by ReasonCodeId, resolve names via `IReasonCodeRepository.ListByIdsAsync`, order by seconds descending" — this story's top-reason computation is the same shape, minus the single-category filter, plus a name tie-break
 - [Source: _bmad-output/implementation-artifacts/3-2-loss-pie-chart-drilldown.md] — precedent for "adding a repository dependency to an existing use case ripples into every existing test construction," directly reused in this story's Task 2/Dev Notes
 
+### Review Findings
+
+Epic 4 code review (2026-07-23), scoped across Stories 4.1/4.2/4.3 together (`bmad-code-review`, 3 parallel layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor).
+
+- [x] [Review][Patch] Top-downtime-reason tie-break (`OrderByDescending(Seconds).ThenBy(Name, Ordinal)`) had no final deterministic tiebreaker — `ReasonCode.Name` has no uniqueness constraint, so two identically-named, identically-timed reason codes could still make the "stable across views" result (AC #2) depend on `ListByIdsAsync`'s enumeration order. Fixed: added `.ThenBy(t => t.Id)` as a final, always-unique tiebreaker. [src/OeeNew.Application/Reports/OeeReportQueryUseCase.cs]
+- [x] [Review][Patch] The full-flow API test (`GetOeeReport_TwoReasonedDowntimeEvents_...`) asserted `TopDowntimeReasonSeconds >= 40` instead of the exact expected value, and ran under an unscoped Admin (global-scope) client that could pick up another test's same-day downtime in the shared test database. Fixed: scoped the request to a Manager token restricted to this test's own Site/Line, and tightened the assertion to `Assert.Equal(40, ...)`. Also applied the same scoped-client fix to `GetOeeReport_NoDowntimeInPeriod_TopDowntimeReasonFieldsAllNull` for the same reason. [tests/OeeNew.Api.Tests/Reports/ReportsEndpointsTests.cs]
+- [x] [Review][Patch] `ResolveTopDowntimeReasonAsync` assumes 1:1 correspondence between `totalsByReasonCodeId`'s keys and `ListByIdsAsync`'s results with no documented rationale for why that's safe. Fixed: added a doc comment explaining the Story 2.5 AC #5 invariant (`ReasonCode` rows are never hard-deleted while referenced) that makes this assumption hold in practice. [src/OeeNew.Application/Reports/OeeReportQueryUseCase.cs]
+
 ## Dev Agent Record
 
 ### Agent Model Used
@@ -120,3 +128,5 @@ None — no blocking failures. The constructor-signature ripple into `OeeReportQ
 ## Change Log
 
 - 2026-07-22: Story 4.3 implemented — top downtime reason (all categories, name-tie-broken, explicit empty state) bundled into Story 4.1/4.2's existing `GetReportAsync` response, no new endpoint. All tasks/subtasks complete, all ACs satisfied, backend and frontend tests green. Status: ready-for-dev → review.
+- 2026-07-23: Epic 4 code review — added a final Id tiebreaker to the top-reason ranking, tightened/isolated the full-flow API tests, and documented the ListByIdsAsync 1:1 assumption (see Review Findings). Backend/frontend regression green. Status: review → done.
+- 2026-07-23 (follow-up): the downtime-clipping fix from Story 4.2's review (see that story's Review Findings) also changed `ResolveTopDowntimeReasonAsync`'s signature to accept the period `start`/`end` and rank by clipped seconds instead of raw `DurationSeconds`, so a boundary-spanning event can no longer inflate which reason "wins." No behavior change for this story's existing tests (all their seeded events were fully inside the period). Full regression: 177/177 Application.Tests, 93/93 Api.Tests.

@@ -243,4 +243,28 @@ public class ReportsEndpointsTests(MasterDataApiFactory factory) : IClassFixture
         Assert.Null(response.TopDowntimeReasonName);
         Assert.Null(response.TopDowntimeReasonSeconds);
     }
+
+    [Fact]
+    public async Task GetOeeReport_UndefinedPeriodTypeValue_ReturnsBadRequest_NotInternalError()
+    {
+        var client = AdminClient();
+
+        var response = await client.GetAsync("/api/reports/oee?periodType=99&referenceDate=2026-07-20");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ApiErrorResponse>();
+        Assert.Equal("VALIDATION_ERROR", error!.Code);
+    }
+
+    [Fact]
+    public async Task GetOeeReport_UndefinedFilterTypeValue_ReturnsBadRequest_NotInternalError()
+    {
+        var client = AdminClient();
+
+        var response = await client.GetAsync($"/api/reports/oee?periodType=Day&referenceDate=2026-07-20&filterType=99&filterId={Guid.NewGuid()}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ApiErrorResponse>();
+        Assert.Equal("VALIDATION_ERROR", error!.Code);
+    }
 }

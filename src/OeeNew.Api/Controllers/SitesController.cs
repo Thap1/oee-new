@@ -2,22 +2,25 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using OeeNew.Api.Auth;
+using OeeNew.Application;
 using OeeNew.Application.Auth;
 using OeeNew.Application.MasterData;
 using OeeNew.Domain.MasterData;
+using OeeNew.Infrastructure.MasterData;
 
 namespace OeeNew.Api.Controllers;
 
 public sealed record CreateSiteRequest([Required] string Name);
 public sealed record RenameSiteRequest([Required] string Name);
-public sealed record SiteResponse(Guid Id, string Name);
+public sealed record SiteResponse(Guid Id, string Name, string? OpenAtUrl);
 
 /// <summary>Site CRUD (Story 1.2, FR-011). Reads: any authenticated role. Writes: Admin only (AC #4, NFR-5).</summary>
 [ApiController]
 [Route("api/master-data/sites")]
 [Authorize]
-public sealed class SitesController(SiteManagementUseCase useCase) : ControllerBase
+public sealed class SitesController(SiteManagementUseCase useCase, AppModeInfo appMode, IOptions<CentralOptions> centralOptions) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<SiteResponse>>> List(CancellationToken cancellationToken)
@@ -52,5 +55,8 @@ public sealed class SitesController(SiteManagementUseCase useCase) : ControllerB
 
     private string? CallerRole => User.FindFirstValue(OeeClaimTypes.Role);
 
-    private static SiteResponse ToResponse(Site site) => new(site.Id, site.Name);
+    private SiteResponse ToResponse(Site site) => new(
+        site.Id,
+        site.Name,
+        appMode.IsCentral ? centralOptions.Value.SiteLinks.GetValueOrDefault(site.Id.ToString()) : null);
 }

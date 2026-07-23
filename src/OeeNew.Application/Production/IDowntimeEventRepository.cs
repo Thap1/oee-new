@@ -10,8 +10,11 @@ namespace OeeNew.Application.Production;
 /// an Operator picked a reason — an accepted outcome, not a defect). Invariant (Story 3.2): <see cref="LossCategory"/>
 /// is non-null if and only if <see cref="ReasonCodeId"/> is non-null — a ReasonCode row is never
 /// hard-deleted while any DowntimeEvent still references it (Story 2.5 AC #5).
+/// <see cref="StartedAt"/>/<see cref="EndedAt"/> (added for Story 4.1's range-based reports) let a
+/// consumer clip this slice's contribution to a sub-window (e.g. a Shift's narrow instant range) instead
+/// of trusting <see cref="DurationSeconds"/> whole — see <see cref="ListClosedSlicesInRangeAsync"/>.
 /// </summary>
-public sealed record ClosedDowntimeSlice(Guid MachineId, Guid? ReasonCodeId, LossCategory? LossCategory, long DurationSeconds);
+public sealed record ClosedDowntimeSlice(Guid MachineId, Guid? ReasonCodeId, LossCategory? LossCategory, long DurationSeconds, DateTimeOffset StartedAt, DateTimeOffset EndedAt);
 
 public interface IDowntimeEventRepository
 {
@@ -40,10 +43,14 @@ public interface IDowntimeEventRepository
     Task<IReadOnlyList<ClosedDowntimeSlice>> ListClosedSlicesAsync(IReadOnlyList<Guid> machineIds, DateOnly? date, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Every closed DowntimeEvent for the given Machines whose StartedAt falls in the arbitrary instant
-    /// window [<paramref name="start"/>, <paramref name="end"/>) (Story 4.1's Shift/Day/Week report periods —
+    /// Every closed DowntimeEvent for the given Machines that <b>overlaps</b> the arbitrary instant window
+    /// [<paramref name="start"/>, <paramref name="end"/>) (Story 4.1's Shift/Day/Week report periods —
     /// unlike <see cref="ListClosedSlicesAsync"/>'s single-calendar-day filter, a Shift may start mid-day and a
-    /// Week spans 7 days).
+    /// Week spans 7 days). Unlike <see cref="ListClosedSlicesAsync"/>'s StartedAt-only filter, this returns an
+    /// event whose <c>StartedAt</c> is before <paramref name="start"/> but whose <c>EndedAt</c> falls inside the
+    /// window (and vice versa) — the caller is expected to clip each slice's <see cref="ClosedDowntimeSlice.DurationSeconds"/>
+    /// contribution to the window using its <see cref="ClosedDowntimeSlice.StartedAt"/>/<see cref="ClosedDowntimeSlice.EndedAt"/>,
+    /// since a narrow Shift window makes boundary-spanning events common (code-review fix, Epic 4).
     /// </summary>
     Task<IReadOnlyList<ClosedDowntimeSlice>> ListClosedSlicesInRangeAsync(
         IReadOnlyList<Guid> machineIds, DateTimeOffset start, DateTimeOffset end, CancellationToken cancellationToken = default);

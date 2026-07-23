@@ -1,10 +1,11 @@
+using OeeNew.Application;
 using OeeNew.Application.Auth;
 using OeeNew.Domain.MasterData;
 
 namespace OeeNew.Application.MasterData;
 
 /// <summary>Create/rename/delete/list Lines under a Site (Story 1.2, AC #2, #5 — FR-011; scope-filtered per Story 1.6, AC #2/#4). Admin-only for writes, re-checked here in addition to the API-layer policy.</summary>
-public sealed class LineManagementUseCase(ILineRepository lines, ISiteRepository sites, IMachineRepository machines)
+public sealed class LineManagementUseCase(ILineRepository lines, ISiteRepository sites, IMachineRepository machines, AppModeInfo appMode)
 {
     public async Task<IReadOnlyList<Line>> ListBySiteAsync(CallerScope scope, Guid siteId, CancellationToken cancellationToken = default)
     {
@@ -19,6 +20,7 @@ public sealed class LineManagementUseCase(ILineRepository lines, ISiteRepository
 
     public async Task<Line> CreateAsync(string? callerRole, Guid siteId, string name, CancellationToken cancellationToken = default)
     {
+        MasterDataAuthorization.EnsureNotCentral(appMode);
         MasterDataAuthorization.EnsureAdmin(callerRole);
 
         var siteExists = await sites.GetAsync(siteId, cancellationToken) is not null;
@@ -32,6 +34,7 @@ public sealed class LineManagementUseCase(ILineRepository lines, ISiteRepository
 
     public async Task<Line> RenameAsync(string? callerRole, Guid id, string name, CancellationToken cancellationToken = default)
     {
+        MasterDataAuthorization.EnsureNotCentral(appMode);
         MasterDataAuthorization.EnsureAdmin(callerRole);
         var line = await lines.GetAsync(id, cancellationToken) ?? throw new MasterDataNotFoundException("Line", id);
         line.Rename(name);
@@ -41,6 +44,7 @@ public sealed class LineManagementUseCase(ILineRepository lines, ISiteRepository
 
     public async Task DeleteAsync(string? callerRole, Guid id, CancellationToken cancellationToken = default)
     {
+        MasterDataAuthorization.EnsureNotCentral(appMode);
         MasterDataAuthorization.EnsureAdmin(callerRole);
         var line = await lines.GetAsync(id, cancellationToken) ?? throw new MasterDataNotFoundException("Line", id);
 

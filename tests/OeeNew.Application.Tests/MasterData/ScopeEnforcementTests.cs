@@ -1,3 +1,4 @@
+using OeeNew.Application;
 using OeeNew.Application.Auth;
 using OeeNew.Application.MasterData;
 using OeeNew.Application.Tests.Production;
@@ -15,7 +16,7 @@ public class ScopeEnforcementTests
         var siteRepo = new FakeSiteRepository();
         var siteA = siteRepo.Seed("Site A");
         var siteB = siteRepo.Seed("Site B");
-        var useCase = new SiteManagementUseCase(siteRepo, new FakeLineRepository());
+        var useCase = new SiteManagementUseCase(siteRepo, new FakeLineRepository(), new AppModeInfo("Site"));
 
         var result = await useCase.ListAsync(CallerScope.Global);
 
@@ -30,7 +31,7 @@ public class ScopeEnforcementTests
         var siteRepo = new FakeSiteRepository();
         var siteA = siteRepo.Seed("Site A");
         siteRepo.Seed("Site B");
-        var useCase = new SiteManagementUseCase(siteRepo, new FakeLineRepository());
+        var useCase = new SiteManagementUseCase(siteRepo, new FakeLineRepository(), new AppModeInfo("Site"));
         var scope = new CallerScope(false, [siteA], []);
 
         var result = await useCase.ListAsync(scope);
@@ -46,7 +47,7 @@ public class ScopeEnforcementTests
         var lineRepo = new FakeLineRepository();
         var siteId = siteRepo.Seed("Site A");
         lineRepo.Seed("Line A", siteId);
-        var useCase = new LineManagementUseCase(lineRepo, siteRepo, new FakeMachineRepository());
+        var useCase = new LineManagementUseCase(lineRepo, siteRepo, new FakeMachineRepository(), new AppModeInfo("Site"));
         var scope = new CallerScope(false, [siteId], []);
 
         var result = await useCase.ListBySiteAsync(scope, siteId);
@@ -60,7 +61,7 @@ public class ScopeEnforcementTests
         var siteRepo = new FakeSiteRepository();
         var lineRepo = new FakeLineRepository();
         var siteId = siteRepo.Seed("Site A");
-        var useCase = new LineManagementUseCase(lineRepo, siteRepo, new FakeMachineRepository());
+        var useCase = new LineManagementUseCase(lineRepo, siteRepo, new FakeMachineRepository(), new AppModeInfo("Site"));
         var scope = new CallerScope(false, [Guid.NewGuid()], []);
 
         await Assert.ThrowsAsync<MasterDataForbiddenException>(() => useCase.ListBySiteAsync(scope, siteId));
@@ -74,7 +75,7 @@ public class ScopeEnforcementTests
         var siteId = siteRepo.Seed("Site A");
         var lineA = lineRepo.Seed("Line A", siteId);
         lineRepo.Seed("Line B", siteId);
-        var useCase = new LineManagementUseCase(lineRepo, siteRepo, new FakeMachineRepository());
+        var useCase = new LineManagementUseCase(lineRepo, siteRepo, new FakeMachineRepository(), new AppModeInfo("Site"));
         var scope = new CallerScope(false, [siteId], [lineA]);
 
         var result = await useCase.ListBySiteAsync(scope, siteId);
@@ -90,7 +91,7 @@ public class ScopeEnforcementTests
         var lineRepo = new FakeLineRepository();
         var siteId = siteRepo.Seed("Site A");
         var lineId = lineRepo.Seed("Line A", siteId);
-        var useCase = new MachineManagementUseCase(new FakeMachineRepository(), lineRepo);
+        var useCase = new MachineManagementUseCase(new FakeMachineRepository(), lineRepo, new AppModeInfo("Site"));
         var scope = new CallerScope(false, [Guid.NewGuid()], []);
 
         await Assert.ThrowsAsync<MasterDataForbiddenException>(() => useCase.ListByLineAsync(scope, lineId));
@@ -99,7 +100,7 @@ public class ScopeEnforcementTests
     [Fact]
     public async Task Machines_ListByLineAsync_NonexistentLine_ReturnsEmptyWithoutThrowing()
     {
-        var useCase = new MachineManagementUseCase(new FakeMachineRepository(), new FakeLineRepository());
+        var useCase = new MachineManagementUseCase(new FakeMachineRepository(), new FakeLineRepository(), new AppModeInfo("Site"));
         var scope = new CallerScope(false, [Guid.NewGuid()], []);
 
         var result = await useCase.ListByLineAsync(scope, Guid.NewGuid());
@@ -112,7 +113,7 @@ public class ScopeEnforcementTests
     {
         var siteRepo = new FakeSiteRepository();
         var siteId = siteRepo.Seed("Site A");
-        var useCase = new ShiftScheduleManagementUseCase(new FakeShiftScheduleRepository(), siteRepo, new FakeLineRepository());
+        var useCase = new ShiftScheduleManagementUseCase(new FakeShiftScheduleRepository(), siteRepo, new FakeLineRepository(), new AppModeInfo("Site"));
         var scope = new CallerScope(false, [Guid.NewGuid()], []);
 
         await Assert.ThrowsAsync<MasterDataForbiddenException>(() => useCase.ListBySiteAsync(scope, siteId));
@@ -123,7 +124,7 @@ public class ScopeEnforcementTests
     {
         var siteRepo = new FakeSiteRepository();
         var siteId = siteRepo.Seed("Site A");
-        var useCase = new ReasonCodeManagementUseCase(new FakeReasonCodeRepository(), siteRepo, new FakeDowntimeEventRepository());
+        var useCase = new ReasonCodeManagementUseCase(new FakeReasonCodeRepository(), siteRepo, new FakeDowntimeEventRepository(), new AppModeInfo("Site"));
         var scope = new CallerScope(false, [Guid.NewGuid()], []);
 
         await Assert.ThrowsAsync<MasterDataForbiddenException>(() => useCase.ListBySiteAsync(scope, siteId));
@@ -136,7 +137,7 @@ public class ScopeEnforcementTests
         var reasonCodeRepo = new FakeReasonCodeRepository();
         var siteId = siteRepo.Seed("Site A");
         reasonCodeRepo.Seed(siteId, "Changeover", LossCategory.PerformanceLoss);
-        var useCase = new ReasonCodeManagementUseCase(reasonCodeRepo, siteRepo, new FakeDowntimeEventRepository());
+        var useCase = new ReasonCodeManagementUseCase(reasonCodeRepo, siteRepo, new FakeDowntimeEventRepository(), new AppModeInfo("Site"));
         var scope = new CallerScope(false, [siteId], []);
 
         var result = await useCase.ListBySiteAsync(scope, siteId);

@@ -52,7 +52,9 @@ public sealed class DowntimeEventRepository(OeeDbContext context) : IDowntimeEve
                 e.MachineId,
                 e.ReasonCodeId,
                 r == null ? (LossCategory?)null : r.LossCategory,
-                (long)(e.EndedAt!.Value - e.StartedAt).TotalSeconds);
+                (long)(e.EndedAt!.Value - e.StartedAt).TotalSeconds,
+                e.StartedAt,
+                e.EndedAt!.Value);
 
         return await query.ToListAsync(cancellationToken);
     }
@@ -60,8 +62,11 @@ public sealed class DowntimeEventRepository(OeeDbContext context) : IDowntimeEve
     public async Task<IReadOnlyList<ClosedDowntimeSlice>> ListClosedSlicesInRangeAsync(
         IReadOnlyList<Guid> machineIds, DateTimeOffset start, DateTimeOffset end, CancellationToken cancellationToken = default)
     {
+        // Code-review fix (Epic 4): overlap check, not StartedAt-only — an event starting before `start`
+        // but ending inside the window (or starting inside but ending after `end`) must still be returned
+        // so the caller can clip it to the window; a Shift's narrow window makes this common.
         var events = context.DowntimeEvents
-            .Where(e => e.EndedAt != null && machineIds.Contains(e.MachineId) && e.StartedAt >= start && e.StartedAt < end);
+            .Where(e => e.EndedAt != null && machineIds.Contains(e.MachineId) && e.StartedAt < end && e.EndedAt > start);
 
         var query =
             from e in events
@@ -71,7 +76,9 @@ public sealed class DowntimeEventRepository(OeeDbContext context) : IDowntimeEve
                 e.MachineId,
                 e.ReasonCodeId,
                 r == null ? (LossCategory?)null : r.LossCategory,
-                (long)(e.EndedAt!.Value - e.StartedAt).TotalSeconds);
+                (long)(e.EndedAt!.Value - e.StartedAt).TotalSeconds,
+                e.StartedAt,
+                e.EndedAt!.Value);
 
         return await query.ToListAsync(cancellationToken);
     }

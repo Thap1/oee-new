@@ -4,16 +4,16 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OeeNew.Application.Auth;
 
-namespace OeeNew.Api.Tests.Sync;
+namespace OeeNew.Api.Tests.MasterData;
 
-/// <summary>
-/// AppMode=Site test host with the same valid API key as <see cref="CentralSyncApiFactory"/> — isolates
-/// the "wrong AppMode" 404 guard in <c>SyncController</c> from the API-key check, so a Site-mode request
-/// with a *correct* key still gets 404 (Story 5.1, AC #4's "no Central endpoint should ever accept
-/// a payload it has no reason to store" reasoning applied symmetrically to a Site instance).
-/// </summary>
-public sealed class SiteModeSyncApiFactory : WebApplicationFactory<Program>
+/// <summary>Test host with one `Central:SiteLinks` entry configured for <see cref="LinkedSiteId"/> (Story 5.2, Task 5's "Open at Site X" link) — <see cref="AppMode"/> is settable before first use so the same SiteLinks config can be exercised under both AppModes (the Site-mode variant proves `openAtUrl` stays null regardless of config).</summary>
+public sealed class SiteOpenAtUrlApiFactory : WebApplicationFactory<Program>
 {
+    public static readonly Guid LinkedSiteId = Guid.Parse("00000000-0000-0000-0000-0000000000aa");
+    public const string LinkedSiteUrl = "https://site-a.oee.local";
+
+    public string AppMode { get; set; } = "Central";
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureAppConfiguration((_, config) =>
@@ -21,13 +21,12 @@ public sealed class SiteModeSyncApiFactory : WebApplicationFactory<Program>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Default"] = "Host=localhost;Port=5432;Database=oeenew_test;Username=postgres;Password=1",
-                ["AppMode"] = "Site",
-                ["Sync:ApiKey"] = CentralSyncApiFactory.TestApiKey,
+                ["AppMode"] = AppMode,
+                [$"Central:SiteLinks:{LinkedSiteId}"] = LinkedSiteUrl,
             });
         });
     }
 
-    /// <summary>Mints a signed JWT for an arbitrary role against this Site-mode host (Story 5.2's Central-read-only regression check needs a Site-mode Admin token too).</summary>
     public string CreateTokenFor(string role) => CreateTokenFor(role, siteIds: [], lineIds: []);
 
     public string CreateTokenFor(string role, Guid[] siteIds, Guid[] lineIds)

@@ -5,6 +5,8 @@ import { firstValueFrom } from 'rxjs';
 export interface SiteDto {
   id: string;
   name: string;
+  /** Story 5.2: only populated at a Central instance, and only for a Site with a configured `Central:SiteLinks` entry — "Mở tại site X" (UX-DR5). */
+  openAtUrl: string | null;
 }
 
 export interface LineDto {

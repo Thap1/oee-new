@@ -20,7 +20,7 @@ namespace OeeNew.Application.Reports;
 /// OEE% = Availability% × Performance% × Quality%
 /// </code>
 /// A stage whose denominator is 0 (100% of the preceding time already lost) reports 0, not NaN.
-/// <see cref="ResolvePeriodAsync"/>/<see cref="ResolveMachinesAsync"/> are split out as reusable building
+/// <see cref="ResolvePeriod"/>/<see cref="ResolveMachinesAsync"/> are split out as reusable building
 /// blocks — Story 4.3's top-downtime-reason report calls back into this same class rather than duplicating them.
 /// </summary>
 public sealed class OeeReportQueryUseCase(
@@ -36,8 +36,16 @@ public sealed class OeeReportQueryUseCase(
         CallerScope scope, ReportPeriodType periodType, DateOnly referenceDate, Guid? shiftScheduleId,
         ReportFilterTargetType? filterType = null, Guid? filterId = null, CancellationToken cancellationToken = default)
     {
-        var (start, end, plannedSecondsPerMachine) = await ResolvePeriodAsync(scope, periodType, referenceDate, shiftScheduleId, cancellationToken);
-        var machineIds = await ResolveMachinesAsync(scope, periodType, referenceDate, shiftScheduleId, cancellationToken);
+        // Code-review fix: the picked ShiftSchedule is fetched and scope-checked exactly once here (was
+        // previously fetched + re-authorized independently inside both ResolvePeriodAsync and
+        // ResolveMachinesAsync) and threaded through to both — removes a redundant DB round-trip and a
+        // narrow TOCTOU window where the two independent checks could observe different shift states.
+        var shift = periodType == ReportPeriodType.Shift
+            ? await ResolveAuthorizedShiftAsync(scope, shiftScheduleId!.Value, cancellationToken)
+            : null;
+
+        var (start, end, plannedSecondsPerMachine) = ResolvePeriod(periodType, referenceDate, shift);
+        var machineIds = await ResolveMachinesAsync(scope, periodType, shift, cancellationToken);
 
         if (filterType is { } type)
         {
@@ -55,7 +63,7 @@ public sealed class OeeReportQueryUseCase(
             return new OeeReportResult(periodType, start, end, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
 
-        // Code-review fix: ResolvePeriodAsync's plannedSeconds is a single machine's planned time budget
+        // Code-review fix: ResolvePeriod's plannedSeconds is a single machine's planned time budget
         // (one day/week/shift), but Day/Week (and any multi-machine filter) can aggregate across many
         // machines at once — dividing an N-machine loss total by a 1-machine time budget produced
         // nonsensical/negative percentages for every caller with more than one machine in scope, which is
@@ -64,10 +72,10 @@ public sealed class OeeReportQueryUseCase(
         var plannedSeconds = plannedSecondsPerMachine * machineIds.Count;
 
         var slices = await downtimeEvents.ListClosedSlicesInRangeAsync(machineIds, start, end, cancellationToken);
-        var availabilityLoss = SumFor(slices, LossCategory.AvailabilityLoss);
-        var performanceLoss = SumFor(slices, LossCategory.PerformanceLoss);
-        var qualityLoss = SumFor(slices, LossCategory.QualityLoss);
-        var unattributed = slices.Where(s => s.LossCategory is null).Sum(s => s.DurationSeconds);
+        var availabilityLoss = SumFor(slices, LossCategory.AvailabilityLoss, start, end);
+        var performanceLoss = SumFor(slices, LossCategory.PerformanceLoss, start, end);
+        var qualityLoss = SumFor(slices, LossCategory.QualityLoss, start, end);
+        var unattributed = slices.Where(s => s.LossCategory is null).Sum(s => ClippedSeconds(s, start, end));
 
         var rejectQuantity = await qualityRejects.SumQuantityInRangeAsync(machineIds, start, end, cancellationToken);
 
@@ -80,13 +88,26 @@ public sealed class OeeReportQueryUseCase(
         var qualityPercent = RatioOrZero(afterQuality, afterPerformance);
         var oeePercent = availabilityPercent * performancePercent * qualityPercent;
 
-        var topReason = await ResolveTopDowntimeReasonAsync(slices, cancellationToken);
+        var topReason = await ResolveTopDowntimeReasonAsync(slices, start, end, cancellationToken);
 
         return new OeeReportResult(
             periodType, start, end,
             availabilityPercent, performancePercent, qualityPercent, oeePercent,
             availabilityLoss, performanceLoss, qualityLoss, unattributed, rejectQuantity,
             topReason?.Id, topReason?.Name, topReason?.Seconds);
+    }
+
+    /// <summary>Fetches the picked <see cref="ShiftSchedule"/> and checks it against <see cref="CallerScope"/> — the single authorization point for a Shift-period request (see Code-review fix note on <see cref="GetReportAsync"/>).</summary>
+    private async Task<ShiftSchedule> ResolveAuthorizedShiftAsync(CallerScope scope, Guid shiftScheduleId, CancellationToken cancellationToken)
+    {
+        var shift = await shiftSchedules.GetAsync(shiftScheduleId, cancellationToken)
+            ?? throw new MasterDataNotFoundException("ShiftSchedule", shiftScheduleId);
+        if (!scope.AllowsSite(shift.SiteId) || (shift.LineId is { } lineId && !scope.AllowsLine(lineId)))
+        {
+            throw new MasterDataForbiddenException();
+        }
+
+        return shift;
     }
 
     /// <summary>
@@ -97,12 +118,12 @@ public sealed class OeeReportQueryUseCase(
     /// <c>null</c> when no attributed downtime exists in the period (AC #3).
     /// </summary>
     private async Task<(Guid Id, string Name, long Seconds)?> ResolveTopDowntimeReasonAsync(
-        IReadOnlyList<ClosedDowntimeSlice> slices, CancellationToken cancellationToken)
+        IReadOnlyList<ClosedDowntimeSlice> slices, DateTimeOffset start, DateTimeOffset end, CancellationToken cancellationToken)
     {
         var totalsByReasonCodeId = slices
             .Where(s => s.ReasonCodeId is not null)
             .GroupBy(s => s.ReasonCodeId!.Value)
-            .ToDictionary(g => g.Key, g => g.Sum(s => s.DurationSeconds));
+            .ToDictionary(g => g.Key, g => g.Sum(s => ClippedSeconds(s, start, end)));
 
         if (totalsByReasonCodeId.Count == 0)
         {
@@ -131,12 +152,13 @@ public sealed class OeeReportQueryUseCase(
     /// <summary>
     /// Resolves the period's absolute <c>[start, end)</c> instant window and its planned-time denominator.
     /// Day/Week use the full UTC calendar period (no per-site "operating hours" concept exists in master
-    /// data); Shift combines the seeded <see cref="ShiftSchedule"/>'s time-of-day window with
-    /// <paramref name="referenceDate"/>, handling the overnight-wrap case the same way
-    /// <see cref="ShiftSchedule.OverlapsWith"/> does.
+    /// data); Shift combines <paramref name="shift"/>'s time-of-day window with <paramref name="referenceDate"/>,
+    /// handling the overnight-wrap case the same way <see cref="ShiftSchedule.OverlapsWith"/> does.
+    /// <paramref name="shift"/> must already be authorized (see <see cref="ResolveAuthorizedShiftAsync"/>) —
+    /// this method trusts it and does not re-check <see cref="CallerScope"/>.
     /// </summary>
-    internal async Task<(DateTimeOffset Start, DateTimeOffset End, long PlannedSeconds)> ResolvePeriodAsync(
-        CallerScope scope, ReportPeriodType periodType, DateOnly referenceDate, Guid? shiftScheduleId, CancellationToken cancellationToken)
+    internal (DateTimeOffset Start, DateTimeOffset End, long PlannedSeconds) ResolvePeriod(
+        ReportPeriodType periodType, DateOnly referenceDate, ShiftSchedule? shift)
     {
         switch (periodType)
         {
@@ -157,15 +179,8 @@ public sealed class OeeReportQueryUseCase(
             }
             case ReportPeriodType.Shift:
             {
-                var shift = await shiftSchedules.GetAsync(shiftScheduleId!.Value, cancellationToken)
-                    ?? throw new MasterDataNotFoundException("ShiftSchedule", shiftScheduleId.Value);
-                if (!scope.AllowsSite(shift.SiteId) || (shift.LineId is { } lineId && !scope.AllowsLine(lineId)))
-                {
-                    throw new MasterDataForbiddenException();
-                }
-
                 var referenceMidnight = DateTime.SpecifyKind(referenceDate.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified);
-                var start = new DateTimeOffset(referenceMidnight, TimeSpan.Zero) + shift.StartTime.ToTimeSpan();
+                var start = new DateTimeOffset(referenceMidnight, TimeSpan.Zero) + shift!.StartTime.ToTimeSpan();
                 var end = shift.EndTime > shift.StartTime
                     ? new DateTimeOffset(referenceMidnight, TimeSpan.Zero) + shift.EndTime.ToTimeSpan()
                     : new DateTimeOffset(referenceMidnight.AddDays(1), TimeSpan.Zero) + shift.EndTime.ToTimeSpan();
@@ -178,13 +193,13 @@ public sealed class OeeReportQueryUseCase(
 
     /// <summary>
     /// Resolves every Machine the report should aggregate over before any Story 4.2 filter is applied.
-    /// Day/Week fall back to the caller's full scope; Shift resolves through the picked
-    /// <see cref="ShiftSchedule"/>'s Site/Line — treated as spoofable client input and checked against
-    /// <see cref="CallerScope"/>, the same reasoning <see cref="Analytics.LossBreakdownQueryUseCase"/>'s
-    /// ResolveEquipmentAsync/ResolveAreaAsync use.
+    /// Day/Week fall back to the caller's full scope; Shift resolves through <paramref name="shift"/>'s
+    /// Site/Line, already authorized by <see cref="ResolveAuthorizedShiftAsync"/> — the same reasoning
+    /// <see cref="Analytics.LossBreakdownQueryUseCase"/>'s ResolveEquipmentAsync/ResolveAreaAsync use,
+    /// just checked once up front instead of again here.
     /// </summary>
     internal async Task<IReadOnlyList<Guid>> ResolveMachinesAsync(
-        CallerScope scope, ReportPeriodType periodType, DateOnly referenceDate, Guid? shiftScheduleId, CancellationToken cancellationToken)
+        CallerScope scope, ReportPeriodType periodType, ShiftSchedule? shift, CancellationToken cancellationToken)
     {
         if (periodType != ReportPeriodType.Shift)
         {
@@ -192,20 +207,8 @@ public sealed class OeeReportQueryUseCase(
             return scoped.Select(m => m.Id).ToList();
         }
 
-        var shift = await shiftSchedules.GetAsync(shiftScheduleId!.Value, cancellationToken)
-            ?? throw new MasterDataNotFoundException("ShiftSchedule", shiftScheduleId.Value);
-        if (!scope.AllowsSite(shift.SiteId))
+        if (shift!.LineId is { } lineId)
         {
-            throw new MasterDataForbiddenException();
-        }
-
-        if (shift.LineId is { } lineId)
-        {
-            if (!scope.AllowsLine(lineId))
-            {
-                throw new MasterDataForbiddenException();
-            }
-
             var lineMachines = await machines.ListByLineAsync(lineId, cancellationToken);
             return lineMachines.Select(m => m.Id).ToList();
         }
@@ -284,8 +287,22 @@ public sealed class OeeReportQueryUseCase(
         return result;
     }
 
-    private static long SumFor(IReadOnlyList<ClosedDowntimeSlice> slices, LossCategory category) =>
-        slices.Where(s => s.LossCategory == category).Sum(s => s.DurationSeconds);
+    private static long SumFor(IReadOnlyList<ClosedDowntimeSlice> slices, LossCategory category, DateTimeOffset start, DateTimeOffset end) =>
+        slices.Where(s => s.LossCategory == category).Sum(s => ClippedSeconds(s, start, end));
+
+    /// <summary>
+    /// Code-review fix (Epic 4): a slice's raw <see cref="ClosedDowntimeSlice.DurationSeconds"/> can span
+    /// past either edge of the report's <c>[start, end)</c> window — <see cref="IDowntimeEventRepository.ListClosedSlicesInRangeAsync"/>
+    /// returns any slice that *overlaps* the window, not just ones fully inside it. Clip to the overlapping
+    /// portion so a long event doesn't inflate a narrow Shift's loss total beyond its own planned time.
+    /// </summary>
+    private static long ClippedSeconds(ClosedDowntimeSlice slice, DateTimeOffset start, DateTimeOffset end)
+    {
+        var clippedStart = slice.StartedAt > start ? slice.StartedAt : start;
+        var clippedEnd = slice.EndedAt < end ? slice.EndedAt : end;
+        var seconds = (clippedEnd - clippedStart).TotalSeconds;
+        return seconds > 0 ? (long)seconds : 0;
+    }
 
     private static double RatioOrZero(double numerator, double denominator) =>
         denominator <= 0 ? 0 : numerator / denominator;

@@ -4,7 +4,7 @@ baseline_commit: 9ed4738da848404782bd3f29958b1547190f72a8
 
 # Story 4.1: Xem báo cáo OEE tổng hợp theo ca/ngày/tuần
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -149,6 +149,16 @@ so that I can review performance without manual Excel compilation.
 - [Source: _bmad-output/implementation-artifacts/deferred-work.md] — the accepted client-side-route-guard gap for `/master-data` that this story's Task 7 deliberately does not generalize beyond `/reports`
 - `System.Globalization.ISOWeek` (.NET base class library, available since .NET Core 3.0) — used for Week-period boundary resolution, no third-party dependency needed
 
+### Review Findings
+
+Epic 4 code review (2026-07-23), scoped across Stories 4.1/4.2/4.3 together (`bmad-code-review`, 3 parallel layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor).
+
+- [x] [Review][Patch] Multi-machine aggregation divided N machines' summed loss by a single machine's planned-time budget (86,400s/604,800s/one shift), producing negative/nonsensical OEE percentages for any caller with more than one machine in scope — the default, unfiltered Day/Week case AC #1 asks for. Fixed: `plannedSeconds` now scales by `machineIds.Count` after any Story 4.2 filter is applied. New regression test: `GetReportAsync_MultiMachine_PlannedSecondsScalesByMachineCount_NotNegative`. [src/OeeNew.Application/Reports/OeeReportQueryUseCase.cs]
+- [x] [Review][Patch] Picking a Shift and then switching the topbar Site left the stale `shiftScheduleId` selected against a freshly-reloaded, unrelated shift list, with the old report still displayed. Fixed: the Site-change `effect()` now clears `shiftScheduleIdSignal`/`reportSignal` before reloading. New tests: `switching the topbar Site while a Shift is picked clears the stale shiftScheduleId and report`. [web/oee-shell/src/app/pages/reports/reports-page.ts]
+- [x] [Review][Patch] `ResolvePeriodAsync`/`ResolveMachinesAsync` each independently re-fetched the same `ShiftSchedule` and re-ran the same Site/Line scope check for a Shift-period request. Fixed (2026-07-23 follow-up): `GetReportAsync` now fetches and authorizes the `ShiftSchedule` exactly once (`ResolveAuthorizedShiftAsync`) and threads it through both now-renamed helpers (`ResolvePeriod` synchronous, `ResolveMachinesAsync` trusts the pre-authorized shift). [src/OeeNew.Application/Reports/OeeReportQueryUseCase.cs]
+- [x] [Review][Patch] `periodType`/`filterType` query-string enums weren't validated against defined members — an out-of-range value (e.g. `periodType=99`) produced a 500 instead of a 400. Fixed (2026-07-23 follow-up): `ReportsController` now checks `Enum.IsDefined` for both before the paired-argument checks. New tests: `GetOeeReport_UndefinedPeriodTypeValue_ReturnsBadRequest_NotInternalError`, `GetOeeReport_UndefinedFilterTypeValue_ReturnsBadRequest_NotInternalError`. [src/OeeNew.Api/Controllers/ReportsController.cs]
+- [x] [Review][Patch] `ListClosedSlicesInRangeAsync` filtered only on `StartedAt`, so a downtime event spanning a period boundary was either fully excluded or fully counted instead of prorated — most consequential for Shift's narrow windows. See Story 4.2's Review Findings for the fix detail (originally deferred there pending product sign-off; user asked to fix directly, now resolved). [src/OeeNew.Application/Production/IDowntimeEventRepository.cs, src/OeeNew.Infrastructure/Persistence/DowntimeEventRepository.cs, src/OeeNew.Application/Reports/OeeReportQueryUseCase.cs]
+
 ## Dev Agent Record
 
 ### Agent Model Used
@@ -204,3 +214,5 @@ None — no blocking failures during implementation; backend and frontend test s
 ## Change Log
 
 - 2026-07-22: Story 4.1 implemented end-to-end (backend OEE aggregation + API + frontend report page + Operator route guard). All tasks/subtasks complete, all ACs satisfied, backend and frontend tests green. Status: ready-for-dev → review.
+- 2026-07-23: Epic 4 code review — fixed the multi-machine planned-seconds denominator bug and the stale-shift-selection UI bug (see Review Findings). 2 deferred items logged to `deferred-work.md`. Backend/frontend regression green. Status: review → done.
+- 2026-07-23 (follow-up): user asked to fix all remaining issues — resolved both previously-deferred items (duplicate ShiftSchedule fetch, enum query-param validation) plus the downtime-clipping fix originating from Story 4.2's review (see that story's Review Findings). `deferred-work.md`'s Epic 4 section removed — nothing left outstanding. Full regression: 177/177 Application.Tests, 93/93 Api.Tests, 17/17 + 61/61 frontend.

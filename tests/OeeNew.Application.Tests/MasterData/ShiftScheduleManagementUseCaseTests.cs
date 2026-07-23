@@ -1,3 +1,4 @@
+using OeeNew.Application;
 using OeeNew.Application.MasterData;
 using Xunit;
 
@@ -6,12 +7,13 @@ namespace OeeNew.Application.Tests.MasterData;
 public class ShiftScheduleManagementUseCaseTests
 {
     private static ShiftScheduleManagementUseCase CreateUseCase(
-        out FakeSiteRepository siteRepo, out FakeLineRepository lineRepo, out FakeShiftScheduleRepository shiftRepo)
+        out FakeSiteRepository siteRepo, out FakeLineRepository lineRepo, out FakeShiftScheduleRepository shiftRepo,
+        AppModeInfo? appMode = null)
     {
         siteRepo = new FakeSiteRepository();
         lineRepo = new FakeLineRepository();
         shiftRepo = new FakeShiftScheduleRepository();
-        return new ShiftScheduleManagementUseCase(shiftRepo, siteRepo, lineRepo);
+        return new ShiftScheduleManagementUseCase(shiftRepo, siteRepo, lineRepo, appMode ?? new AppModeInfo("Site"));
     }
 
     [Fact]
@@ -193,5 +195,36 @@ public class ShiftScheduleManagementUseCaseTests
         var shiftId = shiftRepo.Seed(siteId, null, "Day Shift", new TimeOnly(8, 0), new TimeOnly(16, 0));
 
         await Assert.ThrowsAsync<MasterDataForbiddenException>(() => useCase.DeleteAsync("Viewer", shiftId));
+    }
+
+    [Fact]
+    public async Task CreateAsync_AtCentral_ThrowsCentralReadOnly()
+    {
+        var useCase = CreateUseCase(out var siteRepo, out _, out _, new AppModeInfo("Central"));
+        var siteId = siteRepo.Seed("Site A");
+
+        await Assert.ThrowsAsync<CentralReadOnlyException>(
+            () => useCase.CreateAsync("Admin", siteId, null, "Day Shift", new TimeOnly(8, 0), new TimeOnly(16, 0)));
+    }
+
+    [Fact]
+    public async Task RescheduleAsync_AtCentral_ThrowsCentralReadOnly()
+    {
+        var useCase = CreateUseCase(out var siteRepo, out _, out var shiftRepo, new AppModeInfo("Central"));
+        var siteId = siteRepo.Seed("Site A");
+        var shiftId = shiftRepo.Seed(siteId, null, "Day Shift", new TimeOnly(8, 0), new TimeOnly(16, 0));
+
+        await Assert.ThrowsAsync<CentralReadOnlyException>(
+            () => useCase.RescheduleAsync("Admin", shiftId, "Day Shift", new TimeOnly(9, 0), new TimeOnly(17, 0)));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_AtCentral_ThrowsCentralReadOnly()
+    {
+        var useCase = CreateUseCase(out var siteRepo, out _, out var shiftRepo, new AppModeInfo("Central"));
+        var siteId = siteRepo.Seed("Site A");
+        var shiftId = shiftRepo.Seed(siteId, null, "Day Shift", new TimeOnly(8, 0), new TimeOnly(16, 0));
+
+        await Assert.ThrowsAsync<CentralReadOnlyException>(() => useCase.DeleteAsync("Admin", shiftId));
     }
 }

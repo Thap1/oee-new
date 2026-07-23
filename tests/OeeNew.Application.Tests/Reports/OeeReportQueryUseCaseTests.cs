@@ -29,17 +29,24 @@ public class OeeReportQueryUseCaseTests
         var machineId = machines.Seed("Machine A", lineId, siteId);
 
         var referenceDate = new DateOnly(2026, 7, 20);
+        // Fully inside the day.
         downtimeEvents.SeedClosed(machineId, LossCategory.AvailabilityLoss, 100, new DateTimeOffset(2026, 7, 20, 0, 0, 0, TimeSpan.Zero));
-        // Just before the day starts and just at/after it ends — must be excluded.
+        // Code-review fix: starts 1s before the day but spills 998s into it — must be clipped and
+        // INCLUDED for the overlapping portion only, not excluded entirely (the old StartedAt-only bug)
+        // and not counted for its full 999s (that would double-count the pre-day portion).
         downtimeEvents.SeedClosed(machineId, LossCategory.AvailabilityLoss, 999, new DateTimeOffset(2026, 7, 19, 23, 59, 59, TimeSpan.Zero));
+        // Starts exactly at the day's end boundary (half-open [start,end)) — must still be excluded.
         downtimeEvents.SeedClosed(machineId, LossCategory.AvailabilityLoss, 999, new DateTimeOffset(2026, 7, 21, 0, 0, 0, TimeSpan.Zero));
+        // Entirely before the day, no overlap at all — must be excluded.
+        downtimeEvents.SeedClosed(machineId, LossCategory.AvailabilityLoss, 100, new DateTimeOffset(2026, 7, 19, 20, 0, 0, TimeSpan.Zero));
 
         var useCase = BuildUseCase(machines, lines, shifts, downtimeEvents, qualityRejects);
         var result = await useCase.GetReportAsync(CallerScope.Global, ReportPeriodType.Day, referenceDate, shiftScheduleId: null);
 
         Assert.Equal(new DateTimeOffset(2026, 7, 20, 0, 0, 0, TimeSpan.Zero), result.PeriodStart);
         Assert.Equal(new DateTimeOffset(2026, 7, 21, 0, 0, 0, TimeSpan.Zero), result.PeriodEnd);
-        Assert.Equal(100, result.AvailabilityLossSeconds);
+        // 100 (fully inside) + 998 (clipped portion of the boundary-spanning event) = 1098.
+        Assert.Equal(1098, result.AvailabilityLossSeconds);
     }
 
     [Fact]
@@ -86,6 +93,36 @@ public class OeeReportQueryUseCaseTests
         Assert.Equal(new DateTimeOffset(2026, 7, 20, 22, 0, 0, TimeSpan.Zero), result.PeriodStart);
         Assert.Equal(new DateTimeOffset(2026, 7, 21, 6, 0, 0, TimeSpan.Zero), result.PeriodEnd);
         Assert.Equal(100, result.AvailabilityLossSeconds);
+    }
+
+    /// <summary>
+    /// Code-review fix: a Shift's narrow window (hours, not a full calendar day) makes boundary-spanning
+    /// downtime common — an event that starts inside the shift but keeps running after it ends must be
+    /// clipped to the shift's own window, not counted in full (which could otherwise push the loss total
+    /// past the shift's own planned time and produce a nonsensical negative/over-100% Availability%).
+    /// </summary>
+    [Fact]
+    public async Task GetReportAsync_Shift_EventRunningPastShiftEnd_IsClippedToShiftWindow_NotCountedInFull()
+    {
+        var machines = new FakeMachineRepository();
+        var lines = new FakeLineRepository();
+        var shifts = new FakeShiftScheduleRepository();
+        var downtimeEvents = new FakeDowntimeEventRepository();
+        var qualityRejects = new FakeQualityRejectRepository();
+        var siteId = Guid.NewGuid();
+        var lineId = lines.Seed("Line A", siteId);
+        var machineId = machines.Seed("Machine A", lineId, siteId);
+        var shiftId = shifts.Seed(siteId, lineId, "Night", new TimeOnly(22, 0), new TimeOnly(6, 0));
+
+        var referenceDate = new DateOnly(2026, 7, 20);
+        // Starts at 05:00 (1h before the 06:00 shift end), runs 2h (7200s) — 1h past the shift's end.
+        // Only the 1h (3600s) inside [22:00, 06:00) should count, not the full 7200s.
+        downtimeEvents.SeedClosed(machineId, LossCategory.AvailabilityLoss, 7200, new DateTimeOffset(2026, 7, 21, 5, 0, 0, TimeSpan.Zero));
+
+        var useCase = BuildUseCase(machines, lines, shifts, downtimeEvents, qualityRejects);
+        var result = await useCase.GetReportAsync(CallerScope.Global, ReportPeriodType.Shift, referenceDate, shiftId);
+
+        Assert.Equal(3600, result.AvailabilityLossSeconds);
     }
 
     [Fact]

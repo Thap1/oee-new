@@ -1,3 +1,4 @@
+using OeeNew.Application;
 using OeeNew.Application.MasterData;
 using Xunit;
 
@@ -8,7 +9,7 @@ public class SiteManagementUseCaseTests
     [Fact]
     public async Task CreateAsync_WithValidName_PersistsSiteWithGeneratedId()
     {
-        var useCase = new SiteManagementUseCase(new FakeSiteRepository(), new FakeLineRepository());
+        var useCase = new SiteManagementUseCase(new FakeSiteRepository(), new FakeLineRepository(), new AppModeInfo("Site"));
 
         var site = await useCase.CreateAsync("Admin", "Site A");
 
@@ -19,7 +20,7 @@ public class SiteManagementUseCaseTests
     [Fact]
     public async Task CreateAsync_AsNonAdmin_ThrowsForbidden()
     {
-        var useCase = new SiteManagementUseCase(new FakeSiteRepository(), new FakeLineRepository());
+        var useCase = new SiteManagementUseCase(new FakeSiteRepository(), new FakeLineRepository(), new AppModeInfo("Site"));
 
         await Assert.ThrowsAsync<MasterDataForbiddenException>(() => useCase.CreateAsync("Viewer", "Site A"));
     }
@@ -29,7 +30,7 @@ public class SiteManagementUseCaseTests
     {
         var siteRepo = new FakeSiteRepository();
         var siteId = siteRepo.Seed("Site A");
-        var useCase = new SiteManagementUseCase(siteRepo, new FakeLineRepository());
+        var useCase = new SiteManagementUseCase(siteRepo, new FakeLineRepository(), new AppModeInfo("Site"));
 
         var renamed = await useCase.RenameAsync("Admin", siteId, "Site B");
 
@@ -39,7 +40,7 @@ public class SiteManagementUseCaseTests
     [Fact]
     public async Task RenameAsync_WithUnknownSite_ThrowsNotFound()
     {
-        var useCase = new SiteManagementUseCase(new FakeSiteRepository(), new FakeLineRepository());
+        var useCase = new SiteManagementUseCase(new FakeSiteRepository(), new FakeLineRepository(), new AppModeInfo("Site"));
 
         await Assert.ThrowsAsync<MasterDataNotFoundException>(() => useCase.RenameAsync("Admin", Guid.NewGuid(), "Site B"));
     }
@@ -49,7 +50,7 @@ public class SiteManagementUseCaseTests
     {
         var siteRepo = new FakeSiteRepository();
         var siteId = siteRepo.Seed("Site A");
-        var useCase = new SiteManagementUseCase(siteRepo, new FakeLineRepository());
+        var useCase = new SiteManagementUseCase(siteRepo, new FakeLineRepository(), new AppModeInfo("Site"));
 
         await Assert.ThrowsAsync<MasterDataForbiddenException>(() => useCase.RenameAsync("Viewer", siteId, "Site B"));
     }
@@ -59,7 +60,7 @@ public class SiteManagementUseCaseTests
     {
         var siteRepo = new FakeSiteRepository();
         var siteId = siteRepo.Seed("Site A");
-        var useCase = new SiteManagementUseCase(siteRepo, new FakeLineRepository());
+        var useCase = new SiteManagementUseCase(siteRepo, new FakeLineRepository(), new AppModeInfo("Site"));
 
         await useCase.DeleteAsync("Admin", siteId);
 
@@ -73,7 +74,7 @@ public class SiteManagementUseCaseTests
         var lineRepo = new FakeLineRepository();
         var siteId = siteRepo.Seed("Site A");
         lineRepo.Seed("Line A", siteId);
-        var useCase = new SiteManagementUseCase(siteRepo, lineRepo);
+        var useCase = new SiteManagementUseCase(siteRepo, lineRepo, new AppModeInfo("Site"));
 
         var ex = await Assert.ThrowsAsync<MasterDataHasDependentsException>(() => useCase.DeleteAsync("Admin", siteId));
         Assert.Contains("Line A", ex.DependentNames);
@@ -83,7 +84,7 @@ public class SiteManagementUseCaseTests
     [Fact]
     public async Task DeleteAsync_WithUnknownSite_ThrowsNotFound()
     {
-        var useCase = new SiteManagementUseCase(new FakeSiteRepository(), new FakeLineRepository());
+        var useCase = new SiteManagementUseCase(new FakeSiteRepository(), new FakeLineRepository(), new AppModeInfo("Site"));
 
         await Assert.ThrowsAsync<MasterDataNotFoundException>(() => useCase.DeleteAsync("Admin", Guid.NewGuid()));
     }
@@ -93,8 +94,36 @@ public class SiteManagementUseCaseTests
     {
         var siteRepo = new FakeSiteRepository();
         var siteId = siteRepo.Seed("Site A");
-        var useCase = new SiteManagementUseCase(siteRepo, new FakeLineRepository());
+        var useCase = new SiteManagementUseCase(siteRepo, new FakeLineRepository(), new AppModeInfo("Site"));
 
         await Assert.ThrowsAsync<MasterDataForbiddenException>(() => useCase.DeleteAsync("Viewer", siteId));
+    }
+
+    [Fact]
+    public async Task CreateAsync_AtCentral_ThrowsCentralReadOnly()
+    {
+        var useCase = new SiteManagementUseCase(new FakeSiteRepository(), new FakeLineRepository(), new AppModeInfo("Central"));
+
+        await Assert.ThrowsAsync<CentralReadOnlyException>(() => useCase.CreateAsync("Admin", "Site A"));
+    }
+
+    [Fact]
+    public async Task RenameAsync_AtCentral_ThrowsCentralReadOnly()
+    {
+        var siteRepo = new FakeSiteRepository();
+        var siteId = siteRepo.Seed("Site A");
+        var useCase = new SiteManagementUseCase(siteRepo, new FakeLineRepository(), new AppModeInfo("Central"));
+
+        await Assert.ThrowsAsync<CentralReadOnlyException>(() => useCase.RenameAsync("Admin", siteId, "Site B"));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_AtCentral_ThrowsCentralReadOnly()
+    {
+        var siteRepo = new FakeSiteRepository();
+        var siteId = siteRepo.Seed("Site A");
+        var useCase = new SiteManagementUseCase(siteRepo, new FakeLineRepository(), new AppModeInfo("Central"));
+
+        await Assert.ThrowsAsync<CentralReadOnlyException>(() => useCase.DeleteAsync("Admin", siteId));
     }
 }

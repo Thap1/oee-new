@@ -58,7 +58,22 @@ describe('DashboardPage', () => {
     fixture.detectChanges();
 
     await flushMicrotasks();
+    httpMock.expectOne('/api/app-mode').flush({ mode: 'Site' });
+    await flushMicrotasks();
     httpMock.expectOne('/api/production/machine-states').flush({ noSignalThresholdSeconds, machines });
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    return fixture;
+  }
+
+  async function createCentralDashboard() {
+    const fixture = TestBed.createComponent(DashboardPage);
+    httpMock.expectOne('/i18n/vi.json').flush(I18N_VI);
+    fixture.detectChanges();
+
+    await flushMicrotasks();
+    httpMock.expectOne('/api/app-mode').flush({ mode: 'Central' });
     await flushMicrotasks();
     fixture.detectChanges();
 
@@ -187,5 +202,20 @@ describe('DashboardPage', () => {
     await selectPromise;
 
     expect(fixture.componentInstance.pickerOpen()).toBe(false);
+  });
+
+  it('at Central mode, does not call listMachineStates()/hub.connect() and does not render the dashboard-grid', async () => {
+    const fixture = await createCentralDashboard();
+
+    httpMock.expectNone('/api/production/machine-states');
+    expect(hub.connect).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('.dashboard-grid')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="dashboard-empty-state"]')).toBeNull();
+  });
+
+  it('at Central mode, still renders the Loss Pie Chart', async () => {
+    const fixture = await createCentralDashboard();
+
+    expect(fixture.nativeElement.querySelector('app-loss-pie-chart')).toBeTruthy();
   });
 });

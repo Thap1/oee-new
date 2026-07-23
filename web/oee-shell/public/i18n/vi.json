@@ -18,6 +18,8 @@
   },
   "dashboard": {
     "subtitle": "Trạng thái trực tiếp của tất cả máy trong phạm vi của bạn",
+    "centralAggregateTitle": "Tổng hợp xuyên site",
+    "centralAggregateSubtitle": "Dữ liệu tổng hợp từ tất cả site, cập nhật theo chu kỳ đồng bộ — không phải xem trực tiếp",
     "status": {
       "Running": "Đang chạy",
       "Stopped": "Dừng",
@@ -83,7 +85,9 @@
       "title": "Nguyên nhân dừng máy nhiều nhất",
       "empty": "Không có dữ liệu dừng máy",
       "seconds": "{{seconds}}s"
-    }
+    },
+    "noSiteForShift": "Chọn một Site ở thanh trên để xem các ca làm việc.",
+    "noLineForMachineFilter": "Chọn một Line ở thanh trên để xem các máy."
   },
   "masterData": {
     "sites": "Site",
@@ -111,6 +115,7 @@
     "deactivate": "Ngưng dùng",
     "status": "Trạng thái",
     "actions": "Thao tác",
+    "openAtSite": "Mở tại Site",
     "lossCategory": {
       "label": "Nhóm tổn thất",
       "AvailabilityLoss": "Tổn thất khả dụng",
@@ -132,6 +137,7 @@
       "shiftOverlap": "Ca này chồng lấn với ca đã có: {{message}}",
       "validationError": "Dữ liệu không hợp lệ: {{message}}",
       "forbidden": "Bạn không có quyền thực hiện thao tác này.",
+      "centralReadOnly": "Dữ liệu này chỉ đọc tại instance Trung tâm. Vui lòng thực hiện thay đổi tại Site sở hữu dữ liệu.",
       "usernameTaken": "Tên đăng nhập đã được sử dụng.",
       "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
     }

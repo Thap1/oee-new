@@ -13,6 +13,7 @@ import { PasswordModule } from 'primeng/password';
 import { TableModule } from 'primeng/table';
 import { SelectModule } from 'primeng/select';
 import { AuthService } from '../../core/auth/auth.service';
+import { AppModeService } from '../../core/app-mode/app-mode.service';
 import {
   LineDto,
   LossCategoryValue,
@@ -125,6 +126,8 @@ export class MasterDataPage implements OnInit {
   readonly userSaving = signal(false);
 
   readonly isAdmin = computed(() => this.auth.role() === 'Admin');
+  /** Story 5.2, AC #3: Site/Line/Machine/Shift/ReasonCode writes are read-only at a Central instance — Users are excluded (AD-7). Belt-and-suspenders alongside the real boundary, the backend's `CentralReadOnlyException` (Task 4). */
+  readonly isReadOnly = computed(() => this.appMode.isCentral());
   readonly dialogLevelLabelKey = computed(() => `masterData.${this.dialog().level}s`);
   readonly shiftLineOptions = computed(() => [{ id: null, name: this.translate.instant('masterData.allLines') }, ...this.lines()]);
   readonly userRoleOptions = USER_ROLES.map((role) => ({ value: role, labelKey: `masterData.role.${role.toLowerCase()}` }));
@@ -139,12 +142,14 @@ export class MasterDataPage implements OnInit {
     private readonly masterData: MasterDataService,
     private readonly auth: AuthService,
     private readonly translate: TranslateService,
+    private readonly appMode: AppModeService,
   ) {}
 
   private siteSelectionToken = 0;
   private lineSelectionToken = 0;
 
   ngOnInit(): void {
+    void this.appMode.load();
     void this.loadSites();
     if (this.isAdmin()) {
       void this.loadUsers();
@@ -210,12 +215,18 @@ export class MasterDataPage implements OnInit {
   }
 
   openCreate(level: Level): void {
+    if (this.isReadOnly()) {
+      return;
+    }
     this.error.set(null);
     this.dialogName.set('');
     this.dialog.set({ visible: true, level, mode: 'create', id: null });
   }
 
   openEdit(level: Level, id: string, name: string): void {
+    if (this.isReadOnly()) {
+      return;
+    }
     this.error.set(null);
     this.dialogName.set(name);
     this.dialog.set({ visible: true, level, mode: 'edit', id });
@@ -251,6 +262,9 @@ export class MasterDataPage implements OnInit {
   }
 
   async deleteSite(site: SiteDto): Promise<void> {
+    if (this.isReadOnly()) {
+      return;
+    }
     if (!confirm(this.translate.instant('masterData.confirmDelete', { name: site.name }))) {
       return;
     }
@@ -273,6 +287,9 @@ export class MasterDataPage implements OnInit {
   }
 
   async deleteLine(line: LineDto): Promise<void> {
+    if (this.isReadOnly()) {
+      return;
+    }
     if (!confirm(this.translate.instant('masterData.confirmDelete', { name: line.name }))) {
       return;
     }
@@ -291,6 +308,9 @@ export class MasterDataPage implements OnInit {
   }
 
   async deleteMachine(machine: MachineDto): Promise<void> {
+    if (this.isReadOnly()) {
+      return;
+    }
     if (!confirm(this.translate.instant('masterData.confirmDelete', { name: machine.name }))) {
       return;
     }
@@ -328,6 +348,9 @@ export class MasterDataPage implements OnInit {
   }
 
   openCreateShift(): void {
+    if (this.isReadOnly()) {
+      return;
+    }
     this.error.set(null);
     this.shiftDialogName.set('');
     this.shiftDialogLineId.set(null);
@@ -337,6 +360,9 @@ export class MasterDataPage implements OnInit {
   }
 
   openEditShift(shift: ShiftScheduleDto): void {
+    if (this.isReadOnly()) {
+      return;
+    }
     this.error.set(null);
     this.shiftDialogName.set(shift.name);
     this.shiftDialogLineId.set(shift.lineId);
@@ -377,6 +403,9 @@ export class MasterDataPage implements OnInit {
   }
 
   async deleteShift(shift: ShiftScheduleDto): Promise<void> {
+    if (this.isReadOnly()) {
+      return;
+    }
     if (!confirm(this.translate.instant('masterData.confirmDeleteShift', { name: shift.name }))) {
       return;
     }
@@ -390,6 +419,9 @@ export class MasterDataPage implements OnInit {
   }
 
   openCreateReasonCode(): void {
+    if (this.isReadOnly()) {
+      return;
+    }
     this.error.set(null);
     this.reasonDialogName.set('');
     this.reasonDialogLossCategory.set('AvailabilityLoss');
@@ -420,6 +452,9 @@ export class MasterDataPage implements OnInit {
   }
 
   async deactivateReasonCode(reasonCode: ReasonCodeDto): Promise<void> {
+    if (this.isReadOnly()) {
+      return;
+    }
     this.error.set(null);
     try {
       const updated = await this.masterData.deactivateReasonCode(reasonCode.id);
@@ -430,6 +465,9 @@ export class MasterDataPage implements OnInit {
   }
 
   async deleteReasonCode(reasonCode: ReasonCodeDto): Promise<void> {
+    if (this.isReadOnly()) {
+      return;
+    }
     if (!confirm(this.translate.instant('masterData.confirmDelete', { name: reasonCode.name }))) {
       return;
     }
@@ -576,6 +614,9 @@ export class MasterDataPage implements OnInit {
       }
       if (body?.code === 'FORBIDDEN') {
         return this.translate.instant('masterData.error.forbidden');
+      }
+      if (body?.code === 'CENTRAL_READ_ONLY') {
+        return this.translate.instant('masterData.error.centralReadOnly');
       }
       if (body?.code === 'USERNAME_TAKEN') {
         return this.translate.instant('masterData.error.usernameTaken');
