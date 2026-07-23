@@ -75,4 +75,10 @@ public sealed class DowntimeEventRepository(OeeDbContext context) : IDowntimeEve
 
         return await query.ToListAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<DowntimeEvent>> ListClosedSince(
+        DateTimeOffset since, DateTimeOffset asOf, CancellationToken cancellationToken = default) =>
+        await context.DowntimeEvents
+            .Where(e => e.EndedAt != null && e.EndedAt > since && e.EndedAt <= asOf)
+            .ToListAsync(cancellationToken);
 }

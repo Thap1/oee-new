@@ -17,6 +17,7 @@
     "comingLater": "This feature will be built in a later epic."
   },
   "dashboard": {
+    "subtitle": "Live status of every machine in your scope",
     "status": {
       "Running": "Running",
       "Stopped": "Stopped",

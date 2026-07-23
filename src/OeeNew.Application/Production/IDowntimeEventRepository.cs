@@ -47,4 +47,7 @@ public interface IDowntimeEventRepository
     /// </summary>
     Task<IReadOnlyList<ClosedDowntimeSlice>> ListClosedSlicesInRangeAsync(
         IReadOnlyList<Guid> machineIds, DateTimeOffset start, DateTimeOffset end, CancellationToken cancellationToken = default);
+
+    /// <summary>Closed events (EndedAt != null) whose EndedAt falls in (since, asOf] — the Sync module's "what's new" query (Story 5.1). Unlike <see cref="ListClosedSlicesInRangeAsync"/>, returns full entities (ReasonCodeId/StartedAt/EndedAt all needed on the wire), not the <see cref="ClosedDowntimeSlice"/> projection, and is NOT scoped to a machine list — sync pushes everything this local DB has.</summary>
+    Task<IReadOnlyList<DowntimeEvent>> ListClosedSince(DateTimeOffset since, DateTimeOffset asOf, CancellationToken cancellationToken = default);
 }

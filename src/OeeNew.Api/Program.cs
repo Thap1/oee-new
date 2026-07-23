@@ -16,10 +16,13 @@ using OeeNew.Application.Identity;
 using OeeNew.Application.MasterData;
 using OeeNew.Application.Production;
 using OeeNew.Application.Reports;
+using OeeNew.Application.Sync;
+using OeeNew.Api.Sync;
 using OeeNew.Infrastructure.Identity;
 using OeeNew.Infrastructure.Persistence;
 using OeeNew.Infrastructure.Production;
 using OeeNew.Infrastructure.RealTime;
+using OeeNew.Infrastructure.Sync;
 
 // Constrained containers (e.g. Render's free tier) hit the OS inotify-instance limit from
 // appsettings.json's FileSystemWatcher-based hot-reload, crashing WebApplication.CreateBuilder()
@@ -43,6 +46,7 @@ builder.Services.AddSingleton(new AppModeInfo(appMode));
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<BootstrapAdminOptions>(builder.Configuration.GetSection(BootstrapAdminOptions.SectionName));
 builder.Services.Configure<ProductionOptions>(builder.Configuration.GetSection(ProductionOptions.SectionName));
+builder.Services.Configure<SyncOptions>(builder.Configuration.GetSection(SyncOptions.SectionName));
 
 // Central Identity Provider (AD-7): signing keys + token issuance + credential validation.
 builder.Services.AddSingleton<IJwtSigningKeyProvider, RsaJwtSigningKeyProvider>();
@@ -87,6 +91,31 @@ builder.Services.AddScoped<RecordQualityRejectUseCase>();
 if (builder.Configuration.GetValue<bool>("Production:SimulateSignal"))
 {
     builder.Services.AddHostedService<DemoSignalSimulatorHostedService>();
+}
+
+// Site-to-Central sync (Story 5.1, AD-2): both AppModes get the receive path registered — the runtime
+// appMode.Mode != "Central" check inside SyncController is the actual guard (same pattern as AppModeInfo
+// itself always being registered regardless of mode).
+builder.Services.AddScoped<ISyncIngestRepository, SyncIngestRepository>();
+builder.Services.AddScoped<ISyncStatusRepository, SyncStatusRepository>();
+builder.Services.AddScoped<ReceiveSyncBatchUseCase>();
+builder.Services.AddScoped<ApiKeyAuthFilter>();
+
+// Opt-in (Sync:Enabled) push loop, Site-mode only: most dev/demo runs are a single standalone instance
+// with no reachable Central counterpart, so this must not run unconditionally.
+if (appMode == "Site" && builder.Configuration.GetValue<bool>("Sync:Enabled"))
+{
+    builder.Services.AddHttpClient<ISyncClient, HttpSyncClient>((sp, client) =>
+    {
+        var syncOptions = sp.GetRequiredService<IOptions<SyncOptions>>().Value;
+        if (!string.IsNullOrEmpty(syncOptions.CentralBaseUrl))
+        {
+            client.BaseAddress = new Uri(syncOptions.CentralBaseUrl);
+        }
+    });
+    builder.Services.AddScoped<PushSyncBatchUseCase>();
+    builder.Services.AddScoped<ISyncCursorStore, SyncCursorStore>();
+    builder.Services.AddHostedService<SyncPushHostedService>();
 }
 
 // Loss pie chart (Story 3.1 — FR-019/020/021): read-only aggregation over the same Production tables.

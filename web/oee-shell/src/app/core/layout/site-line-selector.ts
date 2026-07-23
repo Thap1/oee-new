@@ -41,6 +41,7 @@ import { ScopeService } from '../scope/scope.service';
       .site-line-selector {
         display: flex;
         gap: 0.5rem;
+        margin-left: 0.5rem;
       }
     `,
   ],

@@ -35,20 +35,20 @@ const NO_SIGNAL_ICON = 'pi-ban';
   template: `
     @if (snapshot.status === null) {
       <div class="machine-status-card machine-status-card--skeleton" data-testid="machine-status-card">
-        <p-skeleton width="100%" height="96px" />
+        <p-skeleton width="100%" height="148px" />
       </div>
     } @else if (isNoSignal()) {
       <div class="machine-status-card machine-status-card--no-signal" data-testid="machine-status-card">
-        <i class="pi {{ noSignalIcon }}" aria-hidden="true"></i>
+        <i class="pi {{ noSignalIcon }} machine-status-card__icon" aria-hidden="true"></i>
         <div class="machine-status-card__name">{{ snapshot.machineName }}</div>
         <div class="machine-status-card__status">{{ 'dashboard.status.noSignal' | translate: { minutes: noSignalElapsedMinutes() } }}</div>
       </div>
     } @else {
       <div [class]="cardClasses()" data-testid="machine-status-card" (click)="onClick()">
-        <i class="pi {{ iconFor(snapshot.status) }}" aria-hidden="true"></i>
+        <i class="pi {{ iconFor(snapshot.status) }} machine-status-card__icon" aria-hidden="true"></i>
         <div class="machine-status-card__name">{{ snapshot.machineName }}</div>
         <div class="machine-status-card__status">{{ 'dashboard.status.' + snapshot.status | translate }}</div>
-        <div (click)="$event.stopPropagation()">
+        <div class="machine-status-card__actions" (click)="$event.stopPropagation()">
           <app-quality-reject-control [machineId]="snapshot.machineId" />
         </div>
       </div>
@@ -57,45 +57,87 @@ const NO_SIGNAL_ICON = 'pi-ban';
   styles: [
     `
       .machine-status-card {
-        min-height: 96px;
-        padding: 24px;
-        border-radius: var(--content-border-radius, 12px);
+        position: relative;
+        min-height: 148px;
+        padding: 20px 22px;
+        border-radius: var(--app-card-radius, 14px);
         display: flex;
         flex-direction: column;
-        gap: 0.5rem;
+        gap: 0.4rem;
         justify-content: center;
+        box-shadow: var(--app-shadow-md);
+        transition:
+          transform 0.15s ease,
+          box-shadow 0.15s ease;
+      }
+
+      .machine-status-card__icon {
+        position: absolute;
+        top: 16px;
+        right: 18px;
+        font-size: 1.25rem;
+        opacity: 0.55;
       }
 
       .machine-status-card__name {
         font-size: var(--shopfloor-display-size, 56px);
         font-weight: 700;
         line-height: 1.1;
+        letter-spacing: -0.01em;
       }
 
       .machine-status-card__status {
         font-size: var(--shopfloor-label-size, 20px);
         font-weight: 600;
+        opacity: 0.92;
+      }
+
+      .machine-status-card__actions {
+        position: absolute;
+        bottom: 6px;
+        right: 6px;
       }
 
       .machine-status-card--running {
-        background: var(--status-running);
+        background: linear-gradient(155deg, var(--status-running), color-mix(in srgb, var(--status-running) 80%, black));
         color: var(--status-running-fg);
       }
 
       .machine-status-card--stopped,
       .machine-status-card--fault {
-        background: var(--status-stopped);
+        background: linear-gradient(155deg, var(--status-stopped), color-mix(in srgb, var(--status-stopped) 80%, black));
         color: var(--status-stopped-fg);
+        cursor: pointer;
+      }
+
+      .machine-status-card--stopped:hover,
+      .machine-status-card--fault:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--app-shadow-lg);
       }
 
       .machine-status-card--idle {
-        background: var(--status-idle);
+        background: linear-gradient(155deg, var(--status-idle), color-mix(in srgb, var(--status-idle) 82%, black));
         color: var(--status-idle-fg);
       }
 
       .machine-status-card--no-signal {
         background: var(--status-no-signal);
         color: var(--status-no-signal-fg);
+        box-shadow: none;
+        opacity: 0.85;
+      }
+
+      .machine-status-card--skeleton {
+        min-height: 148px;
+        padding: 0;
+        border-radius: var(--app-card-radius, 14px);
+        overflow: hidden;
+        box-shadow: var(--app-shadow-sm);
+
+        ::ng-deep .p-skeleton {
+          border-radius: var(--app-card-radius, 14px);
+        }
       }
 
       .machine-status-card--pulse {
@@ -105,9 +147,11 @@ const NO_SIGNAL_ICON = 'pi-ban';
       @keyframes machine-status-pulse {
         0% {
           opacity: 0.6;
+          transform: scale(0.98);
         }
         100% {
           opacity: 1;
+          transform: scale(1);
         }
       }
     `,

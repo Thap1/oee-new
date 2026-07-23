@@ -20,6 +20,8 @@ public sealed class OeeDbContext(DbContextOptions<OeeDbContext> options) : DbCon
     public DbSet<MachineState> MachineStates => Set<MachineState>();
     public DbSet<DowntimeEvent> DowntimeEvents => Set<DowntimeEvent>();
     public DbSet<QualityReject> QualityRejects => Set<QualityReject>();
+    public DbSet<SyncCursorRow> SyncCursor => Set<SyncCursorRow>();
+    public DbSet<SiteSyncStatus> SiteSyncStatuses => Set<SiteSyncStatus>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -147,6 +149,23 @@ public sealed class OeeDbContext(DbContextOptions<OeeDbContext> options) : DbCon
             qualityReject.Property(q => q.Quantity).HasColumnType("integer");
             qualityReject.Property(q => q.RecordedAt).IsRequired();
             qualityReject.HasOne<Machine>().WithMany().HasForeignKey(q => q.MachineId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SyncCursorRow>(cursor =>
+        {
+            cursor.ToTable("SyncCursor");
+            cursor.HasKey(c => c.Id);
+            cursor.Property(c => c.Id).HasColumnType("smallint").ValueGeneratedNever();
+            cursor.Property(c => c.LastPushedAt).IsRequired(false);
+        });
+
+        modelBuilder.Entity<SiteSyncStatus>(status =>
+        {
+            status.ToTable("SiteSyncStatus");
+            status.HasKey(s => s.SiteId);
+            status.Property(s => s.SiteId).HasColumnType("uuid").ValueGeneratedNever();
+            status.Property(s => s.LastSyncedAt).IsRequired();
+            status.HasOne<Site>().WithMany().HasForeignKey(s => s.SiteId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

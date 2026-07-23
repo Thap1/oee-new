@@ -30,4 +30,9 @@ internal sealed class FakeQualityRejectRepository : IQualityRejectRepository
         var query = Added.Where(q => machineIds.Contains(q.MachineId) && q.RecordedAt >= start && q.RecordedAt < end);
         return Task.FromResult(query.Sum(q => q.Quantity));
     }
+
+    public Task<IReadOnlyList<QualityReject>> ListRecordedSince(
+        DateTimeOffset since, DateTimeOffset asOf, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<QualityReject>>(
+            Added.Where(q => q.RecordedAt > since && q.RecordedAt <= asOf).ToList());
 }

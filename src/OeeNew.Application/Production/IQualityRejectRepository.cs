@@ -18,4 +18,7 @@ public interface IQualityRejectRepository
     /// window [<paramref name="start"/>, <paramref name="end"/>) (Story 4.1's Shift/Day/Week report periods).
     /// </summary>
     Task<int> SumQuantityInRangeAsync(IReadOnlyList<Guid> machineIds, DateTimeOffset start, DateTimeOffset end, CancellationToken cancellationToken = default);
+
+    /// <summary>Every record whose RecordedAt falls in (since, asOf] — the Sync module's "what's new" query (Story 5.1), not scoped to a machine list since sync pushes everything this local DB has.</summary>
+    Task<IReadOnlyList<QualityReject>> ListRecordedSince(DateTimeOffset since, DateTimeOffset asOf, CancellationToken cancellationToken = default);
 }

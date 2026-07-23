@@ -45,7 +45,10 @@ export interface ChartSliceSelectedEvent {
   imports: [FormsModule, TranslatePipe, SelectModule, DatePicker, UIChart],
   template: `
     <div class="loss-pie-chart" data-testid="loss-pie-chart">
-      <h3>{{ 'lossChart.title' | translate }}</h3>
+      <div class="loss-pie-chart__header">
+        <i class="pi pi-chart-pie" aria-hidden="true"></i>
+        <h3>{{ 'lossChart.title' | translate }}</h3>
+      </div>
       <div class="loss-pie-chart__controls">
         <p-select
           [options]="targetTypeOptions()"
@@ -74,17 +77,25 @@ export interface ChartSliceSelectedEvent {
         />
       </div>
       @if (error()) {
-        <div class="loss-pie-chart__error" data-testid="loss-pie-chart-error">{{ 'lossChart.loadError' | translate }}</div>
+        <div class="loss-pie-chart__error" data-testid="loss-pie-chart-error">
+          <i class="pi pi-exclamation-triangle" aria-hidden="true"></i>
+          {{ 'lossChart.loadError' | translate }}
+        </div>
       } @else if (isEmpty()) {
-        <div class="loss-pie-chart__empty" data-testid="loss-pie-chart-empty">{{ 'lossChart.emptyState' | translate }}</div>
+        <div class="loss-pie-chart__empty" data-testid="loss-pie-chart-empty">
+          <i class="pi pi-inbox" aria-hidden="true"></i>
+          {{ 'lossChart.emptyState' | translate }}
+        </div>
       } @else if (chartData()) {
-        <p-chart
-          type="pie"
-          [data]="chartData()"
-          [options]="chartOptions"
-          (onDataSelect)="onSliceSelected($event)"
-          data-testid="loss-pie-chart-canvas"
-        />
+        <div class="loss-pie-chart__canvas-wrap">
+          <p-chart
+            type="pie"
+            [data]="chartData()"
+            [options]="chartOptions"
+            (onDataSelect)="onSliceSelected($event)"
+            data-testid="loss-pie-chart-canvas"
+          />
+        </div>
         @if (breakdownCaption()) {
           <p class="loss-pie-chart__caption" data-testid="loss-pie-chart-caption">{{ breakdownCaption() }}</p>
         }
@@ -107,26 +118,89 @@ export interface ChartSliceSelectedEvent {
   `,
   styles: [
     `
+      .loss-pie-chart {
+        background: var(--p-surface-0, #fff);
+        border: 1px solid var(--p-surface-200, #e5e7eb);
+        border-radius: var(--app-panel-radius, 16px);
+        box-shadow: var(--app-shadow-sm);
+        padding: 1.5rem 1.75rem 1.75rem;
+      }
+
+      .loss-pie-chart__header {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 1.25rem;
+
+        i {
+          font-size: 1.1rem;
+          color: var(--p-primary-color, #10b981);
+        }
+
+        h3 {
+          margin: 0;
+          font-size: 1.1rem;
+          font-weight: 700;
+          color: var(--p-surface-900, #0f172a);
+        }
+      }
+
       .loss-pie-chart__controls {
         display: flex;
-        gap: 0.5rem;
-        margin-bottom: 1rem;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1.25rem;
+        border-bottom: 1px solid var(--p-surface-100, #f1f5f9);
+      }
+
+      .loss-pie-chart__canvas-wrap {
+        max-width: 360px;
+        margin: 0 auto;
       }
 
       .loss-pie-chart__empty,
       .loss-pie-chart__error {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
         text-align: center;
-        padding: 2rem 1rem;
+        padding: 2.5rem 1rem;
+        color: var(--p-surface-500, #64748b);
+
+        i {
+          font-size: 2rem;
+          color: var(--p-surface-300, #cbd5e1);
+        }
+      }
+
+      .loss-pie-chart__error i {
+        color: var(--status-stopped, #ef4444);
       }
 
       .loss-pie-chart__caption {
         text-align: center;
         opacity: 0.75;
         font-size: 0.9rem;
+        margin-top: 1rem;
       }
 
       .loss-pie-chart__reason-breakdown {
-        margin-top: 1rem;
+        margin-top: 1.25rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--p-surface-100, #f1f5f9);
+
+        h4 {
+          margin: 0 0 0.5rem;
+          font-size: 0.95rem;
+          font-weight: 700;
+        }
+
+        ul {
+          margin: 0;
+          padding-left: 1.25rem;
+        }
       }
     `,
   ],

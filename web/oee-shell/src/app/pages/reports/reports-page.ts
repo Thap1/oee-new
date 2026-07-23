@@ -170,18 +170,25 @@ export class ReportsPage implements OnInit {
     // Shift picked before a Site switch never lingers stale (mirrors ScopeService consumers elsewhere).
     // `untracked` keeps this effect scoped to Site changes only — periodType changes are handled by
     // onPeriodTypeChange, and reading it here without untracked would double-fire both on switch.
+    // Code-review fix: the previously-picked shiftScheduleId belongs to the *old* Site and won't exist
+    // in the reloaded list — clear it (and the now-stale displayed report) instead of leaving a dangling
+    // selection silently pointing at data that no longer applies.
     effect(() => {
       const siteId = this.scope.selectedSiteId();
       if (siteId && untracked(this.periodTypeSignal) === 'Shift') {
+        this.shiftScheduleIdSignal.set(null);
+        this.reportSignal.set(null);
         void this.loadShiftsForSite(siteId);
       }
     });
 
     // Same reasoning for the Machine-level filter's target options: reload whenever the topbar's
-    // selected Line changes while that filter level is active.
+    // selected Line changes while that filter level is active, and clear the stale selection/report.
     effect(() => {
       const lineId = this.scope.selectedLineId();
       if (lineId && untracked(this.filterTypeSignal) === 'Machine') {
+        this.filterIdSignal.set(null);
+        this.reportSignal.set(null);
         void this.loadMachinesForLine(lineId);
       }
     });

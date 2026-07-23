@@ -25,13 +25,16 @@ const PULSE_DURATION_MS = 700;
   standalone: true,
   imports: [TranslatePipe, MachineStatusCard, ReasonCodePicker, LossPieChart],
   template: `
-    <h2>{{ 'nav.dashboard' | translate }}</h2>
+    <div class="dashboard-header">
+      <h2>{{ 'nav.dashboard' | translate }}</h2>
+      <p class="dashboard-header__subtitle">{{ 'dashboard.subtitle' | translate }}</p>
+    </div>
     @if (loadError()) {
       <div class="dashboard-empty-state" data-testid="dashboard-load-error">
         <i class="pi pi-exclamation-triangle" aria-hidden="true"></i>
         <div class="dashboard-empty-state__title">{{ 'dashboard.loadError.title' | translate }}</div>
         <div class="dashboard-empty-state__message">{{ 'dashboard.loadError.message' | translate }}</div>
-        <button type="button" data-testid="dashboard-load-error-retry" (click)="retryLoad()">
+        <button type="button" class="dashboard-empty-state__action" data-testid="dashboard-load-error-retry" (click)="retryLoad()">
           {{ 'dashboard.loadError.retry' | translate }}
         </button>
       </div>
@@ -63,29 +66,78 @@ const PULSE_DURATION_MS = 700;
   `,
   styles: [
     `
+      .dashboard-header {
+        margin-bottom: 1.5rem;
+
+        h2 {
+          margin: 0;
+          font-size: 1.5rem;
+          font-weight: 800;
+          letter-spacing: -0.01em;
+          color: var(--p-surface-900, #0f172a);
+        }
+      }
+
+      .dashboard-header__subtitle {
+        margin: 0.25rem 0 0;
+        color: var(--p-surface-500, #64748b);
+        font-size: 0.9rem;
+      }
+
       .dashboard-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1.25rem;
+        margin-bottom: 2rem;
       }
 
       .dashboard-empty-state {
         text-align: center;
-        padding: 3rem 1rem;
+        padding: 3.5rem 1.5rem;
+        margin-bottom: 2rem;
+        background: var(--p-surface-0, #fff);
+        border: 1px solid var(--p-surface-200, #e5e7eb);
+        border-radius: var(--app-panel-radius, 16px);
+        box-shadow: var(--app-shadow-sm);
 
         i {
           font-size: 2.5rem;
+          color: var(--p-surface-300, #cbd5e1);
         }
       }
 
       .dashboard-empty-state__title {
-        font-size: 1.25rem;
-        font-weight: 600;
-        margin-top: 0.75rem;
+        font-size: 1.15rem;
+        font-weight: 700;
+        margin-top: 1rem;
+        color: var(--p-surface-900, #0f172a);
       }
 
       .dashboard-empty-state__message {
-        margin-top: 0.25rem;
+        margin-top: 0.35rem;
+        color: var(--p-surface-500, #64748b);
+      }
+
+      .dashboard-empty-state__action {
+        margin-top: 1.25rem;
+        border: none;
+        background: var(--p-primary-color, #10b981);
+        color: #fff;
+        font-weight: 600;
+        padding: 0.6rem 1.5rem;
+        border-radius: 999px;
+        cursor: pointer;
+        transition:
+          filter 0.15s ease,
+          transform 0.1s ease;
+
+        &:hover {
+          filter: brightness(0.95);
+        }
+
+        &:active {
+          transform: scale(0.98);
+        }
       }
     `,
   ],

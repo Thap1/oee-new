@@ -36,7 +36,7 @@ public sealed class OeeReportQueryUseCase(
         CallerScope scope, ReportPeriodType periodType, DateOnly referenceDate, Guid? shiftScheduleId,
         ReportFilterTargetType? filterType = null, Guid? filterId = null, CancellationToken cancellationToken = default)
     {
-        var (start, end, plannedSeconds) = await ResolvePeriodAsync(scope, periodType, referenceDate, shiftScheduleId, cancellationToken);
+        var (start, end, plannedSecondsPerMachine) = await ResolvePeriodAsync(scope, periodType, referenceDate, shiftScheduleId, cancellationToken);
         var machineIds = await ResolveMachinesAsync(scope, periodType, referenceDate, shiftScheduleId, cancellationToken);
 
         if (filterType is { } type)
@@ -54,6 +54,14 @@ public sealed class OeeReportQueryUseCase(
         {
             return new OeeReportResult(periodType, start, end, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
+
+        // Code-review fix: ResolvePeriodAsync's plannedSeconds is a single machine's planned time budget
+        // (one day/week/shift), but Day/Week (and any multi-machine filter) can aggregate across many
+        // machines at once — dividing an N-machine loss total by a 1-machine time budget produced
+        // nonsensical/negative percentages for every caller with more than one machine in scope, which is
+        // the default, unfiltered case AC #1 asks for. Scaling the denominator by machine count is the
+        // standard multi-asset OEE aggregation convention (total available machine-time, not one machine's).
+        var plannedSeconds = plannedSecondsPerMachine * machineIds.Count;
 
         var slices = await downtimeEvents.ListClosedSlicesInRangeAsync(machineIds, start, end, cancellationToken);
         var availabilityLoss = SumFor(slices, LossCategory.AvailabilityLoss);
@@ -101,14 +109,22 @@ public sealed class OeeReportQueryUseCase(
             return null;
         }
 
+        // ReasonCode.Name has no uniqueness constraint, so a name-only tie-break (AC #2's literal wording)
+        // isn't fully deterministic if two reason codes ever share a name — Id is a final, always-unique
+        // tiebreaker so the result never depends on ListByIdsAsync's enumeration order in that residual case.
         var matchingReasonCodes = await reasonCodes.ListByIdsAsync(totalsByReasonCodeId.Keys.ToList(), cancellationToken);
 
         var ranked = matchingReasonCodes
             .Select(r => (r.Id, r.Name, Seconds: totalsByReasonCodeId[r.Id]))
             .OrderByDescending(t => t.Seconds)
             .ThenBy(t => t.Name, StringComparer.Ordinal)
+            .ThenBy(t => t.Id)
             .ToList();
 
+        // ReasonCode rows are never hard-deleted while a DowntimeEvent still references them (Story 2.5
+        // AC #5 invariant, documented on ClosedDowntimeSlice), so ListByIdsAsync is expected to resolve
+        // every id in totalsByReasonCodeId — ranked.Count should equal totalsByReasonCodeId.Count. If that
+        // invariant is ever violated, this silently ranks over a reduced candidate set rather than failing loudly.
         return ranked.Count > 0 ? ranked[0] : null;
     }
 

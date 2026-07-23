@@ -297,3 +297,37 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260723115827_AddSyncTables') THEN
+    CREATE TABLE "SiteSyncStatus" (
+        "SiteId" uuid NOT NULL,
+        "LastSyncedAt" timestamp with time zone NOT NULL,
+        CONSTRAINT "PK_SiteSyncStatus" PRIMARY KEY ("SiteId"),
+        CONSTRAINT "FK_SiteSyncStatus_Site_SiteId" FOREIGN KEY ("SiteId") REFERENCES "Site" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260723115827_AddSyncTables') THEN
+    CREATE TABLE "SyncCursor" (
+        "Id" smallint NOT NULL,
+        "LastPushedAt" timestamp with time zone,
+        CONSTRAINT "PK_SyncCursor" PRIMARY KEY ("Id")
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260723115827_AddSyncTables') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20260723115827_AddSyncTables', '10.0.10');
+    END IF;
+END $EF$;
+COMMIT;
+

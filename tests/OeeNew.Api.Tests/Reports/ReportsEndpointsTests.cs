@@ -141,13 +141,34 @@ public class ReportsEndpointsTests(MasterDataApiFactory factory) : IClassFixture
         var site = await CreateSiteAsync(client);
         var line = await CreateLineAsync(client, site.Id);
         var machineA = await CreateMachineAsync(client, line.Id);
-        await CreateMachineAsync(client, line.Id);
+        var machineB = await CreateMachineAsync(client, line.Id);
+        var reasonCode = (await (await client.PostAsJsonAsync($"/api/master-data/sites/{site.Id}/reason-codes",
+            new CreateReasonCodeRequest($"Reason {Guid.NewGuid():N}", LossCategory.AvailabilityLoss)))
+            .Content.ReadFromJsonAsync<ReasonCodeResponse>(JsonOptions))!;
 
-        var response = await client.GetFromJsonAsync<OeeReportResponse>(
-            $"/api/reports/oee?periodType=Day&referenceDate=2026-07-20&filterType=Machine&filterId={machineA.Id}");
+        var t0 = DateTimeOffset.UtcNow;
+        // Machine A: 20s of closed, reasoned downtime.
+        await client.PostAsJsonAsync("/api/production/readings", new { machineId = machineA.Id, timestamp = t0, counter = 1, status = "Stopped" });
+        await client.PostAsJsonAsync($"/api/production/machines/{machineA.Id}/downtime-reason", new { reasonCodeId = reasonCode.Id });
+        await client.PostAsJsonAsync("/api/production/readings", new { machineId = machineA.Id, timestamp = t0.AddSeconds(20), counter = 2, status = "Running" });
+        // Machine B: 60s of closed, reasoned downtime — must NOT leak into the Machine-A-filtered report.
+        await client.PostAsJsonAsync("/api/production/readings", new { machineId = machineB.Id, timestamp = t0, counter = 1, status = "Stopped" });
+        await client.PostAsJsonAsync($"/api/production/machines/{machineB.Id}/downtime-reason", new { reasonCodeId = reasonCode.Id });
+        await client.PostAsJsonAsync("/api/production/readings", new { machineId = machineB.Id, timestamp = t0.AddSeconds(60), counter = 2, status = "Running" });
+
+        // Scoped client (Manager restricted to this Site/Line) — an unscoped Admin client would aggregate
+        // every machine in the shared test database for "today", making the assertion below flaky.
+        var scopedClient = factory.CreateClient();
+        scopedClient.DefaultRequestHeaders.Authorization =
+            new("Bearer", factory.CreateTokenFor("Manager", [site.Id], [line.Id]));
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var response = await scopedClient.GetFromJsonAsync<OeeReportResponse>(
+            $"/api/reports/oee?periodType=Day&referenceDate={today:yyyy-MM-dd}&filterType=Machine&filterId={machineA.Id}");
 
         Assert.NotNull(response);
         Assert.Equal("Day", response!.PeriodType);
+        Assert.Equal(20, response.AvailabilityLossSeconds);
     }
 
     [Fact]
@@ -197,7 +218,7 @@ public class ReportsEndpointsTests(MasterDataApiFactory factory) : IClassFixture
 
         Assert.NotNull(response);
         Assert.Equal(bigReason.Id, response!.TopDowntimeReasonCodeId);
-        Assert.True(response.TopDowntimeReasonSeconds >= 40);
+        Assert.Equal(40, response.TopDowntimeReasonSeconds);
     }
 
     [Fact]
@@ -208,7 +229,13 @@ public class ReportsEndpointsTests(MasterDataApiFactory factory) : IClassFixture
         var line = await CreateLineAsync(client, site.Id);
         await CreateMachineAsync(client, line.Id);
 
-        var response = await client.GetFromJsonAsync<OeeReportResponse>(
+        // Scoped client — an unscoped Admin client would aggregate every machine in the shared test
+        // database for this date, which could pick up another test's downtime and flake this assertion.
+        var scopedClient = factory.CreateClient();
+        scopedClient.DefaultRequestHeaders.Authorization =
+            new("Bearer", factory.CreateTokenFor("Manager", [site.Id], [line.Id]));
+
+        var response = await scopedClient.GetFromJsonAsync<OeeReportResponse>(
             "/api/reports/oee?periodType=Day&referenceDate=2026-07-20");
 
         Assert.NotNull(response);

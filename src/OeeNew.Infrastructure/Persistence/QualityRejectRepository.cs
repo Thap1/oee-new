@@ -35,4 +35,10 @@ public sealed class QualityRejectRepository(OeeDbContext context) : IQualityReje
 
         return await query.SumAsync(q => (int?)q.Quantity, cancellationToken) ?? 0;
     }
+
+    public async Task<IReadOnlyList<QualityReject>> ListRecordedSince(
+        DateTimeOffset since, DateTimeOffset asOf, CancellationToken cancellationToken = default) =>
+        await context.QualityRejects
+            .Where(q => q.RecordedAt > since && q.RecordedAt <= asOf)
+            .ToListAsync(cancellationToken);
 }

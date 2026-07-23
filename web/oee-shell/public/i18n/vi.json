@@ -17,6 +17,7 @@
     "comingLater": "Tính năng này sẽ được xây dựng ở epic sau."
   },
   "dashboard": {
+    "subtitle": "Trạng thái trực tiếp của tất cả máy trong phạm vi của bạn",
     "status": {
       "Running": "Đang chạy",
       "Stopped": "Dừng",

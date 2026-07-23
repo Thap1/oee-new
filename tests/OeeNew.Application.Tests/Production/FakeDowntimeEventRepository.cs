@@ -73,5 +73,13 @@ internal sealed class FakeDowntimeEventRepository : IDowntimeEventRepository
     public void SeedClosed(Guid machineId, Guid? reasonCodeId, LossCategory? lossCategory, long durationSeconds, DateTimeOffset startedAt) =>
         _closedSlices.Add((machineId, reasonCodeId, lossCategory, durationSeconds, startedAt));
 
+    public Task<IReadOnlyList<DowntimeEvent>> ListClosedSince(
+        DateTimeOffset since, DateTimeOffset asOf, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<DowntimeEvent>>(
+            _events.Values.Where(e => e.EndedAt is { } ended && ended > since && ended <= asOf).ToList());
+
     public IReadOnlyList<DowntimeEvent> All => _events.Values.ToList();
+
+    /// <summary>Directly inserts a fully-formed (e.g. already-closed) event, bypassing the open/close lifecycle above — used by Sync tests that need entities <see cref="ListClosedSince"/> can find.</summary>
+    public void SeedEvent(DowntimeEvent downtimeEvent) => _events[downtimeEvent.Id] = downtimeEvent;
 }

@@ -209,6 +209,44 @@ public class OeeReportQueryUseCaseTests
         Assert.Equal(100, result.AvailabilityLossSeconds);
     }
 
+    /// <summary>
+    /// Code-review fix (Epic 4 review): ResolvePeriodAsync's plannedSeconds is a single machine's time
+    /// budget (86,400 for a Day), but Day/Week aggregate over every machine in scope — dividing an
+    /// N-machine loss total by a 1-machine budget produced negative/nonsensical percentages for any
+    /// caller with more than one machine, which is the default AC #1 case. The denominator must scale
+    /// by the number of machines actually aggregated.
+    /// </summary>
+    [Fact]
+    public async Task GetReportAsync_MultiMachine_PlannedSecondsScalesByMachineCount_NotNegative()
+    {
+        var machines = new FakeMachineRepository();
+        var lines = new FakeLineRepository();
+        var shifts = new FakeShiftScheduleRepository();
+        var downtimeEvents = new FakeDowntimeEventRepository();
+        var qualityRejects = new FakeQualityRejectRepository();
+        var siteId = Guid.NewGuid();
+        var lineId = lines.Seed("Line A", siteId);
+        var machineA = machines.Seed("Machine A", lineId, siteId);
+        var machineB = machines.Seed("Machine B", lineId, siteId);
+        var machineC = machines.Seed("Machine C", lineId, siteId);
+
+        var referenceDate = new DateOnly(2026, 7, 20);
+        // Each machine loses more than a single machine's own day (86,400s) would allow if undivided —
+        // this would go negative under the old fixed-86,400-denominator bug.
+        downtimeEvents.SeedClosed(machineA, LossCategory.AvailabilityLoss, 50_000, new DateTimeOffset(2026, 7, 20, 1, 0, 0, TimeSpan.Zero));
+        downtimeEvents.SeedClosed(machineB, LossCategory.AvailabilityLoss, 50_000, new DateTimeOffset(2026, 7, 20, 1, 0, 0, TimeSpan.Zero));
+        downtimeEvents.SeedClosed(machineC, LossCategory.AvailabilityLoss, 50_000, new DateTimeOffset(2026, 7, 20, 1, 0, 0, TimeSpan.Zero));
+
+        var useCase = BuildUseCase(machines, lines, shifts, downtimeEvents, qualityRejects);
+        var result = await useCase.GetReportAsync(CallerScope.Global, ReportPeriodType.Day, referenceDate, shiftScheduleId: null);
+
+        // Planned = 3 machines * 86,400s = 259,200s; total loss = 150,000s.
+        Assert.Equal(150_000, result.AvailabilityLossSeconds);
+        var expectedAvailabilityPercent = (259_200.0 - 150_000.0) / 259_200.0;
+        Assert.Equal(expectedAvailabilityPercent, result.AvailabilityPercent, 5);
+        Assert.True(result.AvailabilityPercent > 0, "Availability percent went negative — multi-machine denominator regressed.");
+    }
+
     [Theory]
     [InlineData(ReportFilterTargetType.Site)]
     [InlineData(ReportFilterTargetType.Line)]
