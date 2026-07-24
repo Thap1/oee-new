@@ -42,6 +42,17 @@
       "submit": "Save"
     }
   },
+  "downtime": {
+    "machine": "Machine",
+    "reason": "Reason",
+    "startedAt": "Started",
+    "endedAt": "Ended",
+    "duration": "Duration",
+    "ongoing": "Ongoing",
+    "unattributed": "No reason assigned",
+    "emptyState": "No downtime recorded yet for your scope.",
+    "loadError": "Could not load downtime history. Please try again."
+  },
   "lossChart": {
     "title": "Loss Breakdown",
     "byEquipment": "By Equipment",

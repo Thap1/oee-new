@@ -42,6 +42,17 @@
       "submit": "Lưu"
     }
   },
+  "downtime": {
+    "machine": "Máy",
+    "reason": "Lý do",
+    "startedAt": "Bắt đầu",
+    "endedAt": "Kết thúc",
+    "duration": "Thời lượng",
+    "ongoing": "Đang dừng",
+    "unattributed": "Chưa gán lý do",
+    "emptyState": "Chưa có dữ liệu dừng máy trong phạm vi của bạn.",
+    "loadError": "Không tải được lịch sử dừng máy. Vui lòng thử lại."
+  },
   "lossChart": {
     "title": "Phân bổ tổn thất",
     "byEquipment": "Theo Equipment",

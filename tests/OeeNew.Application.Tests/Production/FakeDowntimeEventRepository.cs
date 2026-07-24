@@ -80,6 +80,11 @@ internal sealed class FakeDowntimeEventRepository : IDowntimeEventRepository
         Task.FromResult<IReadOnlyList<DowntimeEvent>>(
             _events.Values.Where(e => e.EndedAt is { } ended && ended > since && ended <= asOf).ToList());
 
+    public Task<IReadOnlyList<DowntimeEvent>> ListByMachineIdsAsync(
+        IReadOnlyList<Guid> machineIds, int limit, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<DowntimeEvent>>(
+            _events.Values.Where(e => machineIds.Contains(e.MachineId)).OrderByDescending(e => e.StartedAt).Take(limit).ToList());
+
     public IReadOnlyList<DowntimeEvent> All => _events.Values.ToList();
 
     /// <summary>Directly inserts a fully-formed (e.g. already-closed) event, bypassing the open/close lifecycle above — used by Sync tests that need entities <see cref="ListClosedSince"/> can find.</summary>

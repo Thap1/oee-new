@@ -88,4 +88,12 @@ public sealed class DowntimeEventRepository(OeeDbContext context) : IDowntimeEve
         await context.DowntimeEvents
             .Where(e => e.EndedAt != null && e.EndedAt > since && e.EndedAt <= asOf)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<DowntimeEvent>> ListByMachineIdsAsync(
+        IReadOnlyList<Guid> machineIds, int limit, CancellationToken cancellationToken = default) =>
+        await context.DowntimeEvents
+            .Where(e => machineIds.Contains(e.MachineId))
+            .OrderByDescending(e => e.StartedAt)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
 }

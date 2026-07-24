@@ -57,4 +57,13 @@ public interface IDowntimeEventRepository
 
     /// <summary>Closed events (EndedAt != null) whose EndedAt falls in (since, asOf] — the Sync module's "what's new" query (Story 5.1). Unlike <see cref="ListClosedSlicesInRangeAsync"/>, returns full entities (ReasonCodeId/StartedAt/EndedAt all needed on the wire), not the <see cref="ClosedDowntimeSlice"/> projection, and is NOT scoped to a machine list — sync pushes everything this local DB has.</summary>
     Task<IReadOnlyList<DowntimeEvent>> ListClosedSince(DateTimeOffset since, DateTimeOffset asOf, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Most recent events (open or closed) for the given Machines, newest <see cref="DowntimeEvent.StartedAt"/>
+    /// first — the Downtime history page's data source. Bounded by <paramref name="limit"/> deliberately: this
+    /// table can grow quickly under the demo signal simulator's random-status mode (one insert per Stopped
+    /// transition per tick), so "return everything" isn't a safe default here the way it is for small,
+    /// naturally-bounded master-data lists elsewhere in the codebase.
+    /// </summary>
+    Task<IReadOnlyList<DowntimeEvent>> ListByMachineIdsAsync(IReadOnlyList<Guid> machineIds, int limit, CancellationToken cancellationToken = default);
 }

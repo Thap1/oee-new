@@ -94,6 +94,7 @@ builder.Services.AddScoped<IngestProductionReadingUseCase>();
 builder.Services.AddScoped<MachineStatusQueryUseCase>();
 builder.Services.AddScoped<RecordDowntimeReasonUseCase>();
 builder.Services.AddScoped<RecordQualityRejectUseCase>();
+builder.Services.AddScoped<DowntimeHistoryQueryUseCase>();
 
 // Opt-in (Production:SimulateSignal): fake a live PLC/gateway feed for demo/deploy environments so
 // seeded machines don't all drift into no-signal a minute after boot — see db/init/02_seed.sql.
