@@ -2,10 +2,13 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using OeeNew.Api.Controllers;
 using OeeNew.Api.Errors;
 using OeeNew.Api.Tests.MasterData;
 using OeeNew.Domain.Identity;
+using OeeNew.Infrastructure.Persistence;
 using Xunit;
 
 namespace OeeNew.Api.Tests.Identity;
@@ -130,5 +133,53 @@ public class UserEndpointsTests(MasterDataApiFactory factory) : IClassFixture<Ma
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var updated = await response.Content.ReadFromJsonAsync<UserResponse>(JsonOptions);
         Assert.Equal(UserRole.Viewer, updated!.Role);
+    }
+
+    [Fact]
+    public async Task Deactivate_ExistingUser_ReturnsInactiveUser()
+    {
+        var client = AdminClient();
+        var siteId = await CreateSiteAsync(client);
+        var username = $"mgr-{Guid.NewGuid():N}";
+        var created = (await (await client.PostAsJsonAsync("/api/users",
+            new CreateUserRequest(username, "Passw0rd!", UserRole.Manager, [siteId], [])))
+            .Content.ReadFromJsonAsync<UserResponse>(JsonOptions))!;
+
+        var response = await client.PutAsync($"/api/users/{created.Id}/deactivate", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var updated = await response.Content.ReadFromJsonAsync<UserResponse>(JsonOptions);
+        Assert.False(updated!.IsActive);
+    }
+
+    /// <summary>
+    /// Story 1.4 review (D3): a row that predates the "Manager/Viewer can't carry LineIds" rule
+    /// added by this same review must still be readable, not throw on materialization. Inserted via
+    /// raw SQL to bypass the app entirely — proves EF Core's parameterless constructor (not the
+    /// validating one) is what actually runs on read.
+    /// </summary>
+    [Fact]
+    public async Task List_RowViolatesCurrentDomainInvariant_StillReadsWithoutThrowing()
+    {
+        var client = AdminClient();
+        var siteId = await CreateSiteAsync(client);
+        var lineId = await CreateLineAsync(client, siteId);
+        var username = $"legacy-{Guid.NewGuid():N}";
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OeeDbContext>();
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                INSERT INTO "User" ("Id", "Username", "Role", "PasswordHash", "SiteIds", "LineIds", "IsActive")
+                VALUES (uuidv7(), {username}, 'Manager', 'hash', ARRAY[{siteId}]::uuid[], ARRAY[{lineId}]::uuid[], true)
+                """);
+        }
+
+        var response = await client.GetAsync("/api/users");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var users = await response.Content.ReadFromJsonAsync<List<UserResponse>>(JsonOptions);
+        Assert.Contains(users!, u => u.Username == username);
     }
 }

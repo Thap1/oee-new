@@ -18,6 +18,22 @@ public sealed class User
     public string PasswordHash { get; private set; }
     public Guid[] SiteIds { get; private set; }
     public Guid[] LineIds { get; private set; }
+    public bool IsActive { get; private set; }
+
+    /// <summary>
+    /// EF Core materialization only (Story 1.4 review) — deliberately bypasses domain validation so
+    /// reading an existing row can never throw. EF's constructor-binding convention greedily prefers
+    /// the constructor with the most bindable parameters, so this parameterless one is only picked up
+    /// when explicitly selected — see <c>OeeDbContext</c>'s <c>HasConstructorBinding</c> for <see cref="User"/>.
+    /// Never call this directly; use the validating constructor below or <see cref="Rescope"/>.
+    /// </summary>
+    private User()
+    {
+        Username = string.Empty;
+        PasswordHash = string.Empty;
+        SiteIds = [];
+        LineIds = [];
+    }
 
     public User(Guid id, string username, UserRole role, string passwordHash, Guid[] siteIds, Guid[] lineIds)
     {
@@ -27,6 +43,7 @@ public sealed class User
         Role = default;
         SiteIds = [];
         LineIds = [];
+        IsActive = true;
         Rescope(role, siteIds, lineIds);
     }
 
@@ -41,6 +58,16 @@ public sealed class User
         SiteIds = distinctSiteIds;
         LineIds = distinctLineIds;
     }
+
+    /// <summary>Hide this user from login (Story 1.4 review, mirrors <c>ReasonCode.Deactivate</c>) without deleting role/scope history.</summary>
+    public void Deactivate() => IsActive = false;
+
+    /// <summary>Replace the credential hash after a rehash (e.g. <c>PasswordVerificationResult.SuccessRehashNeeded</c>). Does not touch role/scope.</summary>
+    public void UpdatePasswordHash(string passwordHash) => PasswordHash = ValidatePasswordHash(passwordHash);
+
+    /// <summary>Validate a role/scope combination without constructing a <see cref="User"/> — lets callers fail fast before doing anything else (e.g. before provisioning a credential).</summary>
+    public static void ValidateRoleAndScope(UserRole role, Guid[] siteIds, Guid[] lineIds) =>
+        ValidateScoping(role, siteIds.Distinct().ToArray(), lineIds.Distinct().ToArray());
 
     private static void ValidateScoping(UserRole role, IReadOnlyList<Guid> siteIds, IReadOnlyList<Guid> lineIds)
     {
@@ -59,9 +86,16 @@ public sealed class User
             throw new MasterDataValidationException($"{role} must be assigned to at least one Site.");
         }
 
-        if (role == UserRole.Operator && lineIds.Count == 0)
+        if (role == UserRole.Operator)
         {
-            throw new MasterDataValidationException("Operator must be assigned to at least one Line.");
+            if (lineIds.Count == 0)
+            {
+                throw new MasterDataValidationException("Operator must be assigned to at least one Line.");
+            }
+        }
+        else if (lineIds.Count > 0)
+        {
+            throw new MasterDataValidationException($"{role} is scoped to Site only and cannot be assigned to a Line.");
         }
     }
 

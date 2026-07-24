@@ -253,14 +253,28 @@
             <th>{{ 'masterData.role.label' | translate }}</th>
             <th>{{ 'masterData.sites' | translate }}</th>
             <th>{{ 'masterData.lines' | translate }}</th>
+            <th>{{ 'masterData.status' | translate }}</th>
+            <th class="master-data__actions">{{ 'masterData.actions' | translate }}</th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-user>
-          <tr [attr.data-testid]="'user-row-' + user.username">
+          <tr [attr.data-testid]="'user-row-' + user.username" [class.master-data__row--inactive]="!user.isActive">
             <td>{{ user.username }}</td>
             <td>{{ ('masterData.role.' + user.role.toLowerCase()) | translate }}</td>
             <td>{{ user.siteIds.length }}</td>
             <td>{{ user.lineIds.length }}</td>
+            <td>{{ (user.isActive ? 'masterData.active' : 'masterData.inactive') | translate }}</td>
+            <td class="master-data__actions">
+              @if (user.isActive) {
+                <p-button
+                  icon="pi pi-eye-slash"
+                  [text]="true"
+                  [label]="'masterData.deactivate' | translate"
+                  (onClick)="deactivateUser(user)"
+                  data-testid="deactivate-user-btn"
+                />
+              }
+            </td>
           </tr>
         </ng-template>
       </p-table>

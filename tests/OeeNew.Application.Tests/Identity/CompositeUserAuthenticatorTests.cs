@@ -29,7 +29,7 @@ public class CompositeUserAuthenticatorTests
     {
         var repo = new FakeUserRepository();
         repo.Seed("mgr1", UserRole.Manager, UserHasher.HashPassword(null!, "Passw0rd!"), [Guid.NewGuid()], []);
-        var composite = new CompositeUserAuthenticator(new PersistedUserAuthenticator(repo), CreateBootstrap(out _));
+        var composite = new CompositeUserAuthenticator(new PersistedUserAuthenticator(repo), CreateBootstrap(out _), repo);
 
         var result = await composite.ValidateCredentialsAsync("mgr1", "Passw0rd!");
 
@@ -41,7 +41,7 @@ public class CompositeUserAuthenticatorTests
     public async Task ValidateCredentialsAsync_UserNotInPersistedStore_FallsBackToBootstrapAdmin()
     {
         var repo = new FakeUserRepository();
-        var composite = new CompositeUserAuthenticator(new PersistedUserAuthenticator(repo), CreateBootstrap(out var adminId));
+        var composite = new CompositeUserAuthenticator(new PersistedUserAuthenticator(repo), CreateBootstrap(out var adminId), repo);
 
         var result = await composite.ValidateCredentialsAsync("admin", "ChangeMe123!");
 
@@ -53,13 +53,28 @@ public class CompositeUserAuthenticatorTests
     [Fact]
     public async Task ValidateCredentialsAsync_PersistedStoreThrows_FallsBackToBootstrapAdmin()
     {
-        var throwingAuthenticator = new PersistedUserAuthenticator(new ThrowingUserRepository());
-        var composite = new CompositeUserAuthenticator(throwingAuthenticator, CreateBootstrap(out var adminId));
+        var throwingRepo = new ThrowingUserRepository();
+        var throwingAuthenticator = new PersistedUserAuthenticator(throwingRepo);
+        var composite = new CompositeUserAuthenticator(throwingAuthenticator, CreateBootstrap(out var adminId), throwingRepo);
 
         var result = await composite.ValidateCredentialsAsync("admin", "ChangeMe123!");
 
         Assert.NotNull(result);
         Assert.Equal(adminId, result!.UserId);
+    }
+
+    [Fact]
+    public async Task ValidateCredentialsAsync_PersistedUserExistsWithWrongPassword_DoesNotFallBackToBootstrapAdmin()
+    {
+        // Story 1.4 review: a persisted user whose username collides with the bootstrap Admin's
+        // configured username must not be authenticatable via the bootstrap password.
+        var repo = new FakeUserRepository();
+        repo.Seed("admin", UserRole.Admin, UserHasher.HashPassword(null!, "RealPassword1!"), [], []);
+        var composite = new CompositeUserAuthenticator(new PersistedUserAuthenticator(repo), CreateBootstrap(out _), repo);
+
+        var result = await composite.ValidateCredentialsAsync("admin", "ChangeMe123!");
+
+        Assert.Null(result);
     }
 
     private sealed class ThrowingUserRepository : IUserRepository

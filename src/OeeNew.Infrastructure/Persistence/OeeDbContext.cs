@@ -103,6 +103,7 @@ public sealed class OeeDbContext(DbContextOptions<OeeDbContext> options) : DbCon
             // consistent with how Story 1.2/1.3's other existence checks are app-level, not DB-level.
             user.Property(u => u.SiteIds).HasColumnType("uuid[]");
             user.Property(u => u.LineIds).HasColumnType("uuid[]");
+            user.Property(u => u.IsActive).IsRequired().HasDefaultValue(true);
         });
 
         modelBuilder.Entity<MachineState>(state =>

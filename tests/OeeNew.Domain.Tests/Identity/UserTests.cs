@@ -108,4 +108,29 @@ public class UserTests
 
         Assert.Throws<MasterDataValidationException>(() => user.Rescope(UserRole.Operator, [SiteId], []));
     }
+
+    [Fact]
+    public void Constructor_ManagerWithLine_Throws()
+    {
+        Assert.Throws<MasterDataValidationException>(
+            () => new User(Guid.Empty, "mgr", UserRole.Manager, "hash", [SiteId], [LineId]));
+    }
+
+    [Fact]
+    public void Constructor_NewUser_IsActive()
+    {
+        var user = new User(Guid.Empty, "mgr", UserRole.Manager, "hash", [SiteId], []);
+
+        Assert.True(user.IsActive);
+    }
+
+    [Fact]
+    public void Deactivate_SetsIsActiveFalse()
+    {
+        var user = new User(Guid.Empty, "mgr", UserRole.Manager, "hash", [SiteId], []);
+
+        user.Deactivate();
+
+        Assert.False(user.IsActive);
+    }
 }

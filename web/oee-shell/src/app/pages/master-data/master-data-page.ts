@@ -147,6 +147,7 @@ export class MasterDataPage implements OnInit {
 
   private siteSelectionToken = 0;
   private lineSelectionToken = 0;
+  private userLineOptionsToken = 0;
 
   ngOnInit(): void {
     void this.appMode.load();
@@ -501,6 +502,10 @@ export class MasterDataPage implements OnInit {
     this.userDialogRole.set(role);
     if (role === 'Admin') {
       this.userDialogSiteIds.set([]);
+    }
+    if (role !== 'Operator') {
+      // Only Operator carries LineIds (Domain's ValidateScoping rejects them for every other
+      // role) — clear stale selections left over from a prior Operator choice in this dialog.
       this.userDialogLineIds.set([]);
       this.userDialogLineOptions.set([]);
     }
@@ -508,16 +513,26 @@ export class MasterDataPage implements OnInit {
 
   async onUserSiteIdsChange(siteIds: string[]): Promise<void> {
     this.userDialogSiteIds.set(siteIds);
+    const token = ++this.userLineOptionsToken;
     if (siteIds.length === 0) {
       this.userDialogLineOptions.set([]);
       this.userDialogLineIds.set([]);
       return;
     }
-    const lineLists = await Promise.all(siteIds.map((siteId) => this.masterData.listLines(siteId)));
-    const options = lineLists.flat();
-    this.userDialogLineOptions.set(options);
-    const validIds = new Set(options.map((l) => l.id));
-    this.userDialogLineIds.update((ids) => ids.filter((id) => validIds.has(id)));
+    try {
+      const lineLists = await Promise.all(siteIds.map((siteId) => this.masterData.listLines(siteId)));
+      if (token !== this.userLineOptionsToken) {
+        return;
+      }
+      const options = lineLists.flat();
+      this.userDialogLineOptions.set(options);
+      const validIds = new Set(options.map((l) => l.id));
+      this.userDialogLineIds.update((ids) => ids.filter((id) => validIds.has(id)));
+    } catch (err) {
+      if (token === this.userLineOptionsToken) {
+        this.error.set(this.describeError(err));
+      }
+    }
   }
 
   async saveUser(): Promise<void> {
@@ -537,6 +552,16 @@ export class MasterDataPage implements OnInit {
       await this.handleError(err);
     } finally {
       this.userSaving.set(false);
+    }
+  }
+
+  async deactivateUser(user: UserDto): Promise<void> {
+    this.error.set(null);
+    try {
+      const updated = await this.masterData.deactivateUser(user.id);
+      this.users.update((list) => list.map((u) => (u.id === updated.id ? updated : u)));
+    } catch (err) {
+      await this.handleError(err);
     }
   }
 

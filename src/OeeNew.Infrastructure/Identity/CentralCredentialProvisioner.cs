@@ -13,6 +13,9 @@ public sealed class CentralCredentialProvisioner : ICentralCredentialProvisioner
 {
     private readonly IPasswordHasher<User> _hasher = new PasswordHasher<User>();
 
-    public Task<string> ProvisionAsync(string username, string password, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_hasher.HashPassword(null!, password));
+    public Task<string> ProvisionAsync(string username, string password, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(_hasher.HashPassword(null!, password));
+    }
 }

@@ -447,6 +447,31 @@ describe('MasterDataPage', () => {
     httpMock.verify();
   });
 
+  it('deactivating a User keeps the record but marks it inactive', async () => {
+    const { fixture, httpMock } = await setUp('Admin');
+    const component = fixture.componentInstance;
+    component.users.set([{ id: 'user-1', username: 'mgr1', role: 'Manager', siteIds: ['site-1'], lineIds: [], isActive: true }]);
+    fixture.detectChanges();
+
+    const deactivatePromise = component.deactivateUser(component.users()[0]);
+    const req = httpMock.expectOne('/api/users/user-1/deactivate');
+    expect(req.request.method).toBe('PUT');
+    req.flush({ id: 'user-1', username: 'mgr1', role: 'Manager', siteIds: ['site-1'], lineIds: [], isActive: false });
+    await deactivatePromise;
+    fixture.detectChanges();
+
+    expect(component.users()).toContainEqual({
+      id: 'user-1',
+      username: 'mgr1',
+      role: 'Manager',
+      siteIds: ['site-1'],
+      lineIds: [],
+      isActive: false,
+    });
+
+    httpMock.verify();
+  });
+
   it('at Central mode, create/edit/delete buttons for Site/Line/Machine/Shift/ReasonCode are absent', async () => {
     const { fixture, httpMock } = await setUp('Admin', 'Central');
     const el: HTMLElement = fixture.nativeElement;

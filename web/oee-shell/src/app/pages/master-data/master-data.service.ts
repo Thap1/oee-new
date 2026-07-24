@@ -48,6 +48,7 @@ export interface UserDto {
   role: UserRoleValue;
   siteIds: string[];
   lineIds: string[];
+  isActive: boolean;
 }
 
 /** Site &gt; Line &gt; Machine CRUD (Story 1.2, FR-011). Reads: any role. Writes: Admin only (enforced server-side). */
@@ -145,5 +146,9 @@ export class MasterDataService {
 
   createUser(username: string, password: string, role: UserRoleValue, siteIds: string[], lineIds: string[]): Promise<UserDto> {
     return firstValueFrom(this.http.post<UserDto>('/api/users', { username, password, role, siteIds, lineIds }));
+  }
+
+  deactivateUser(id: string): Promise<UserDto> {
+    return firstValueFrom(this.http.put<UserDto>(`/api/users/${id}/deactivate`, null));
   }
 }

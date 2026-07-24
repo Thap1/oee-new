@@ -17,7 +17,7 @@ public sealed class PersistedUserAuthenticator(IUserRepository users) : IUserAut
     public async Task<AuthenticatedUser?> ValidateCredentialsAsync(string username, string password, CancellationToken cancellationToken = default)
     {
         var user = await users.GetByUsernameAsync(username, cancellationToken);
-        if (user is null)
+        if (user is null || !user.IsActive)
         {
             return null;
         }
@@ -26,6 +26,12 @@ public sealed class PersistedUserAuthenticator(IUserRepository users) : IUserAut
         if (verification == PasswordVerificationResult.Failed)
         {
             return null;
+        }
+
+        if (verification == PasswordVerificationResult.SuccessRehashNeeded)
+        {
+            user.UpdatePasswordHash(_hasher.HashPassword(user, password));
+            await users.UpdateAsync(user, cancellationToken);
         }
 
         return new AuthenticatedUser(user.Id, user.Username, user.Role.ToString(), user.SiteIds, user.LineIds);

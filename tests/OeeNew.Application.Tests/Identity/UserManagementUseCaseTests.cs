@@ -2,6 +2,7 @@ using OeeNew.Application.Identity;
 using OeeNew.Application.MasterData;
 using OeeNew.Application.Tests.MasterData;
 using OeeNew.Domain.Identity;
+using OeeNew.Domain.MasterData;
 using Xunit;
 
 namespace OeeNew.Application.Tests.Identity;
@@ -127,5 +128,60 @@ public class UserManagementUseCaseTests
         var useCase = CreateUseCase(out _, out _, out _);
 
         await Assert.ThrowsAsync<MasterDataForbiddenException>(() => useCase.ListAsync("Operator"));
+    }
+
+    [Fact]
+    public async Task UpdateRoleAndScopeAsync_DemotingTheOnlyAdmin_ThrowsValidation()
+    {
+        var useCase = CreateUseCase(out var siteRepo, out _, out var userRepo);
+        var siteId = siteRepo.Seed("Site A");
+        var adminId = userRepo.Seed("admin1", UserRole.Admin, "hash", [], []);
+
+        await Assert.ThrowsAsync<MasterDataValidationException>(
+            () => useCase.UpdateRoleAndScopeAsync("Admin", adminId, UserRole.Manager, [siteId], []));
+    }
+
+    [Fact]
+    public async Task UpdateRoleAndScopeAsync_DemotingAdminWithAnotherActiveAdmin_Succeeds()
+    {
+        var useCase = CreateUseCase(out var siteRepo, out _, out var userRepo);
+        var siteId = siteRepo.Seed("Site A");
+        var adminId = userRepo.Seed("admin1", UserRole.Admin, "hash", [], []);
+        userRepo.Seed("admin2", UserRole.Admin, "hash", [], []);
+
+        var updated = await useCase.UpdateRoleAndScopeAsync("Admin", adminId, UserRole.Manager, [siteId], []);
+
+        Assert.Equal(UserRole.Manager, updated.Role);
+    }
+
+    [Fact]
+    public async Task DeactivateAsync_DeactivatesUser()
+    {
+        var useCase = CreateUseCase(out var siteRepo, out _, out var userRepo);
+        var siteId = siteRepo.Seed("Site A");
+        var userId = userRepo.Seed("mgr1", UserRole.Manager, "hash", [siteId], []);
+
+        var deactivated = await useCase.DeactivateAsync("Admin", userId);
+
+        Assert.False(deactivated.IsActive);
+    }
+
+    [Fact]
+    public async Task DeactivateAsync_TheOnlyAdmin_ThrowsValidation()
+    {
+        var useCase = CreateUseCase(out _, out _, out var userRepo);
+        var adminId = userRepo.Seed("admin1", UserRole.Admin, "hash", [], []);
+
+        await Assert.ThrowsAsync<MasterDataValidationException>(() => useCase.DeactivateAsync("Admin", adminId));
+    }
+
+    [Fact]
+    public async Task DeactivateAsync_AsNonAdmin_ThrowsForbidden()
+    {
+        var useCase = CreateUseCase(out var siteRepo, out _, out var userRepo);
+        var siteId = siteRepo.Seed("Site A");
+        var userId = userRepo.Seed("mgr1", UserRole.Manager, "hash", [siteId], []);
+
+        await Assert.ThrowsAsync<MasterDataForbiddenException>(() => useCase.DeactivateAsync("Manager", userId));
     }
 }

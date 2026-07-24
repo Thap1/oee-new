@@ -4,7 +4,7 @@ baseline_commit: 02a9f37398e618878419952bcf67de3b9559f700
 
 # Story 1.4: Quản lý người dùng, vai trò & phạm vi site/line
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -38,6 +38,31 @@ so that each user only sees/acts within their scope.
 - [x] Task 5: Testing (tất cả AC)
   - [x] Unit test Domain: Admin không nhận role-scoping; Operator bắt buộc có ít nhất 1 Line
   - [x] Integration test: tạo user Operator → JWT (giả lập login) chứa đúng siteId/lineIds; tạo user khi trung tâm không tới được → lỗi rõ ràng, không có bản ghi role-scoping mồ côi; role≠Admin gọi API → 403
+
+### Review Findings
+
+- [x] [Review][Decision] Line multi-select only renders for role=Operator, not every non-Admin role — `web/oee-shell/src/app/pages/master-data/master-data-page.ts:139` (`showUserLineField`). Task 4's literal wording says "nếu Role≠Admin, hiện multi-select Site/Line" (implying Manager/Viewer should see it too), but the actual behavior matches `User.ValidateScoping`'s real rule that only Operator requires a Line. **Resolved by user decision (2026-07-24): keep as-is, Operator-only is the correct interpretation of Task 4** — Manager/Viewer must never carry `LineIds`. No code change from this item; this also confirms the fix direction for the "stale LineIds" patch item below (Domain should reject non-empty `LineIds` for Manager/Viewer, not just clear them client-side).
+
+- [x] [Review][Patch] Role field omitted from Create/Update JSON silently defaults to Admin (privilege escalation) — `src/OeeNew.Api/Controllers/UsersController.cs:11-12`. Fixed: `Role` is now `UserRole?` with `[Required, EnumDataType(typeof(UserRole))]`, so a missing or out-of-range role fails model validation (400) instead of silently binding to `Admin`.
+- [x] [Review][Patch] Bootstrap-admin fallback also fires on a *wrong password* — `src/OeeNew.Infrastructure/Identity/CompositeUserAuthenticator.cs:16-29`. Fixed: `CompositeUserAuthenticator` now checks `IUserRepository.GetByUsernameAsync` when the persisted authenticator returns null; if a persisted user exists for that username, it returns `null` instead of falling through to the bootstrap Admin. Covered by new test `ValidateCredentialsAsync_PersistedUserExistsWithWrongPassword_DoesNotFallBackToBootstrapAdmin`.
+- [x] [Review][Patch] Provision-before-persist ordering can still orphan a central credential — `src/OeeNew.Application/Identity/UserManagementUseCase.cs:19-39`. Fixed: `User.ValidateRoleAndScope` (new static entry point reusing the constructor's validation) runs before `ProvisionAsync`; `UserRepository.AddAsync` now catches the unique-index violation (`PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }`) and raises `UsernameAlreadyTakenException` so `ApiExceptionHandler` maps the race to `USERNAME_TAKEN` instead of a generic `CONFLICT`.
+- [x] [Review][Patch] Switching role away from Operator doesn't clear stale Line selections, and Domain doesn't reject them either — `web/oee-shell/src/app/pages/master-data/master-data-page.ts:500-507`, `src/OeeNew.Domain/Identity/User.cs:45-66`. Fixed: `onUserRoleChange` clears `userDialogLineIds`/`userDialogLineOptions` for every non-Operator role, and `ValidateScoping` now throws for any Manager/Viewer with non-empty `lineIds` (defense in depth) — consistent with the review's decision to keep the Line field Operator-only.
+- [x] [Review][Patch] `onUserSiteIdsChange` has no stale-response guard or error handling — `web/oee-shell/src/app/pages/master-data/master-data-page.ts:509-521`. Fixed: added a `userLineOptionsToken` counter (same pattern as `siteSelectionToken`/`lineSelectionToken`) plus a try/catch that surfaces errors via `describeError`.
+- [x] [Review][Patch] `SuccessRehashNeeded` is never handled — `src/OeeNew.Infrastructure/Identity/PersistedUserAuthenticator.cs:25-29`. Fixed: on `SuccessRehashNeeded`, a fresh hash is computed and persisted via the new `User.UpdatePasswordHash` before returning the authenticated result.
+- [x] [Review][Patch] `CreatedAtAction(nameof(List), ...)` produces a useless Location header — `src/OeeNew.Api/Controllers/UsersController.cs:34`. Fixed: added `GET /api/users/{id}` (`UsersController.GetById` + `UserManagementUseCase.GetAsync`) and `Create` now targets it.
+- [x] [Review][Patch] No minimum length/complexity check on password — `src/OeeNew.Api/Controllers/UsersController.cs:11`. Fixed: added `[MinLength(8)]` to `CreateUserRequest.Password`.
+- [x] [Review][Patch] Login rate limiter has no partition key — `src/OeeNew.Api/Program.cs:227-234`. Fixed: replaced the single `AddFixedWindowLimiter` with `AddPolicy("login", ...)` partitioned by `httpContext.Connection.RemoteIpAddress`.
+
+All 9 patches applied 2026-07-24. Full suite re-verified green: `dotnet test` 360/360 (Domain 68, Application 182 [+1 new], Architecture 2, Api 108), `npx ng test --include=**/master-data-page.spec.ts` 20/20, `npx ng build` clean.
+
+**Second pass 2026-07-24 (user asked to also fix the deferred items):** D2 (last-admin guard), D3 (EF materialization), D5 (deactivate endpoint), D6 (CancellationToken) all fixed — see entries below. D1 (AD-7 real split) re-investigated and confirmed still genuinely blocked; D4 (concurrency token) stays deferred as an existing codebase-wide convention. New migration `20260724145627_AddUserIsActive` applied to `oeenew_test` and regenerated into `db/init/01_schema.sql`. Full suite re-verified green again: `dotnet test` 371/371 (Domain 71, Application 188, Architecture 2, Api 110), `npx ng test --include=**/master-data-page.spec.ts` 21/21, `npx ng build` clean.
+
+- [x] [Review][Defer] AD-7's site-local-scoping vs. central-credential split isn't actually implemented (both live on the same `User` row/DB) [`src/OeeNew.Domain/Identity/User.cs`]. **Re-investigated 2026-07-24 at user's request to implement for real — confirmed genuinely blocked, still deferred.** Two separate pieces of missing infrastructure, not a single fixable file: (1) `SyncBatch` (`src/OeeNew.Application/Sync/SyncBatch.cs`) carries no User/role-scoping record — no wire path exists for a Site to push scoping to Central; (2) `RsaJwtSigningKeyProvider` is a per-process in-memory RSA key store with no cross-instance JWKS federation — a JWT signed by one instance can never validate at another. Recommendation: scope as its own story/epic ("Cross-Instance Identity Federation") rather than folding into this one. See `deferred-work.md` for the full note.
+- [x] [Review][Patch] No "last admin" guard — `UpdateRoleAndScopeAsync`/new `DeactivateAsync` can demote or deactivate the sole remaining Admin [`src/OeeNew.Application/Identity/UserManagementUseCase.cs`]. Fixed 2026-07-24: both paths now call `EnsureNotLastAdminAsync`, throwing `MasterDataValidationException` if no other active Admin remains.
+- [x] [Review][Patch] `User`'s only constructor re-runs full domain validation, and EF Core used it for materialization, so a future invariant change could break existing reads [`src/OeeNew.Domain/Identity/User.cs`]. Fixed 2026-07-24: added a private parameterless constructor so EF Core injects properties directly on materialization instead of running `Rescope`'s validation on every read; validation still runs on every explicit `Create`/`Rescope`/`Deactivate` write path.
+- [x] [Review][Defer] No optimistic concurrency token on `User` updates — last-write-wins on concurrent `PUT` [`src/OeeNew.Infrastructure/Persistence/UserRepository.cs:25-26`] — deferred, consistent with every other master-data entity in the codebase today, not a regression specific to this story.
+- [x] [Review][Patch] No delete/deactivate/disable endpoint for `User` [`src/OeeNew.Api/Controllers/UsersController.cs`]. Fixed 2026-07-24: added `IsActive` (default true, migration `AddUserIsActive`), `User.Deactivate()`, `UserManagementUseCase.DeactivateAsync`, `PUT /api/users/{id}/deactivate`, `PersistedUserAuthenticator` now rejects login for an inactive user, and a matching Angular deactivate action in the Users panel — mirrors the ReasonCode deactivate pattern from this same commit.
+- [x] [Review][Patch] `CentralCredentialProvisioner.ProvisionAsync` accepts but ignores its `CancellationToken` [`src/OeeNew.Infrastructure/Identity/CentralCredentialProvisioner.cs`]. Fixed 2026-07-24: now calls `cancellationToken.ThrowIfCancellationRequested()` before hashing.
 
 ## Dev Notes
 
@@ -112,6 +137,24 @@ Claude Sonnet 5 (Amelia — BMad dev agent)
 
 **Not committed to the repo (local machine state, listed for traceability):**
 - `AddUser` migration applied to local Postgres database `oeenew_test` (not yet applied to `oeenew_dev`).
+
+**Review fix pass 2026-07-24 — new:**
+- `src/OeeNew.Infrastructure/Persistence/Migrations/20260724145627_AddUserIsActive.cs`, `.Designer.cs` (+ updated `OeeDbContextModelSnapshot.cs`)
+
+**Review fix pass 2026-07-24 — modified:**
+- `src/OeeNew.Domain/Identity/User.cs` (`IsActive`, `Deactivate()`, `ValidateRoleAndScope`, `UpdatePasswordHash`, private parameterless ctor, Manager/Viewer LineIds now rejected)
+- `src/OeeNew.Application/Identity/UserManagementUseCase.cs` (`GetAsync`, `DeactivateAsync`, `EnsureNotLastAdminAsync`, role/scope validated before credential provisioning)
+- `src/OeeNew.Api/Controllers/UsersController.cs` (`Role` now required+validated, `GetById`, `Deactivate`, `UserResponse.IsActive`, password `[MinLength(8)]`)
+- `src/OeeNew.Api/Program.cs` (login rate limiter partitioned by client IP)
+- `src/OeeNew.Infrastructure/Persistence/UserRepository.cs` (unique-index violation → `UsernameAlreadyTakenException`)
+- `src/OeeNew.Infrastructure/Persistence/OeeDbContext.cs` (`User.IsActive` mapping)
+- `src/OeeNew.Infrastructure/Identity/CompositeUserAuthenticator.cs` (no bootstrap fallback when a persisted user exists but the password is wrong)
+- `src/OeeNew.Infrastructure/Identity/PersistedUserAuthenticator.cs` (rehash-on-`SuccessRehashNeeded`, reject login for inactive users)
+- `src/OeeNew.Infrastructure/Identity/CentralCredentialProvisioner.cs` (honors `CancellationToken`)
+- `web/oee-shell/src/app/pages/master-data/master-data.service.ts` (`UserDto.isActive`, `deactivateUser`)
+- `web/oee-shell/src/app/pages/master-data/master-data-page.ts`, `.html` (Users table Status/Actions columns + deactivate button; role-switch clears stale LineIds; `onUserSiteIdsChange` stale-response guard)
+- `db/init/01_schema.sql` (regenerated via `dotnet ef migrations script --idempotent`)
+- `tests/OeeNew.Domain.Tests/Identity/UserTests.cs`, `tests/OeeNew.Application.Tests/Identity/UserManagementUseCaseTests.cs`, `PersistedUserAuthenticatorTests.cs`, `CompositeUserAuthenticatorTests.cs`, `tests/OeeNew.Api.Tests/Identity/UserEndpointsTests.cs`, `web/oee-shell/src/app/pages/master-data/master-data-page.spec.ts` (new regression tests for every patch above)
 
 ## Change Log
 

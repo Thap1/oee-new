@@ -223,15 +223,18 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("AdminOnly", policy => policy.RequireClaim(OeeClaimTypes.Role, "Admin"))
     .AddPolicy("ReportsAccess", policy => policy.RequireClaim(OeeClaimTypes.Role, "Admin", "Manager", "Viewer"));
 
-// Throttle login attempts against the bootstrap Admin account (brute-force mitigation).
+// Throttle login attempts (brute-force mitigation). Partitioned per client IP (Story 1.4 review) —
+// a single global bucket would let one client's traffic lock out every other client's logins.
 builder.Services.AddRateLimiter(options =>
 {
-    options.AddFixedWindowLimiter("login", limiterOptions =>
-    {
-        limiterOptions.PermitLimit = 10;
-        limiterOptions.Window = TimeSpan.FromMinutes(1);
-        limiterOptions.QueueLimit = 0;
-    });
+    options.AddPolicy("login", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        }));
     options.OnRejected = (context, cancellationToken) =>
         new ValueTask(ApiErrorWriter.WriteAsync(context.HttpContext, StatusCodes.Status429TooManyRequests,
             "TOO_MANY_REQUESTS", "Too many login attempts. Please try again later."));

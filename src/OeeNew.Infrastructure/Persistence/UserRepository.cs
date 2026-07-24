@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using OeeNew.Application.Identity;
 using OeeNew.Domain.Identity;
 
@@ -9,7 +10,18 @@ public sealed class UserRepository(OeeDbContext context) : IUserRepository
     public async Task<User> AddAsync(User user, CancellationToken cancellationToken = default)
     {
         context.Users.Add(user);
-        await context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // A concurrent CreateAsync for the same username won the uniqueness-check race (Story
+            // 1.4 review) — surface it as the same exception the pre-check throws, not a generic
+            // DbUpdateException, so ApiExceptionHandler maps it to USERNAME_TAKEN instead of CONFLICT.
+            throw new UsernameAlreadyTakenException(user.Username);
+        }
+
         return user;
     }
 

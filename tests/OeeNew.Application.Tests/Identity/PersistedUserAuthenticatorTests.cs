@@ -56,6 +56,22 @@ public class PersistedUserAuthenticatorTests
     }
 
     [Fact]
+    public async Task ValidateCredentialsAsync_DeactivatedUser_ReturnsNullEvenWithCorrectPassword()
+    {
+        var repo = new FakeUserRepository();
+        var authenticator = new PersistedUserAuthenticator(repo);
+        var hash = Hasher.HashPassword(null!, "Passw0rd!");
+        var userId = repo.Seed("op1", UserRole.Operator, hash, [Guid.NewGuid()], [Guid.NewGuid()]);
+        var user = await repo.GetAsync(userId);
+        user!.Deactivate();
+        await repo.UpdateAsync(user);
+
+        var result = await authenticator.ValidateCredentialsAsync("op1", "Passw0rd!");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
     public async Task Login_ForOperatorCreatedViaUseCase_IssuesJwtWithMatchingSiteAndLineClaims()
     {
         // AC #1 end-to-end (simulated login, no HTTP): create an Operator via UserManagementUseCase,
