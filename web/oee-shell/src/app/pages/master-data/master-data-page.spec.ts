@@ -446,4 +446,49 @@ describe('MasterDataPage', () => {
 
     httpMock.verify();
   });
+
+  it('at Central mode, create/edit/delete buttons for Site/Line/Machine/Shift/ReasonCode are absent', async () => {
+    const { fixture, httpMock } = await setUp('Admin', 'Central');
+    const el: HTMLElement = fixture.nativeElement;
+
+    expect(el.querySelector('[data-testid="add-site-btn"]')).toBeNull();
+    expect(el.querySelector('[data-testid="edit-site-btn"]')).toBeNull();
+    expect(el.querySelector('[data-testid="delete-site-btn"]')).toBeNull();
+    expect(el.querySelector('[data-testid="add-shift-btn"]')).toBeNull();
+    expect(el.querySelector('[data-testid="add-reason-code-btn"]')).toBeNull();
+
+    httpMock.verify();
+  });
+
+  it('at Central mode, User-management controls remain visible/functional regardless of mode', async () => {
+    const { fixture, httpMock } = await setUp('Admin', 'Central');
+    const el: HTMLElement = fixture.nativeElement;
+
+    expect(el.querySelector('[data-testid="add-user-btn"]')).toBeTruthy();
+
+    httpMock.verify();
+  });
+
+  it('at Central mode, the "Open at Site X" link renders when openAtUrl is present, and is absent when null', async () => {
+    const { fixture, httpMock } = await setUp('Admin', 'Central', [
+      { id: 'site-1', name: 'Site A', openAtUrl: 'https://site-a.oee.local' },
+      { id: 'site-2', name: 'Site B', openAtUrl: null },
+    ]);
+    const el: HTMLElement = fixture.nativeElement;
+
+    const links = Array.from(el.querySelectorAll('[data-testid="open-at-site-link"]')) as HTMLAnchorElement[];
+    expect(links).toHaveLength(1);
+    expect(links[0].getAttribute('href')).toBe('https://site-a.oee.local');
+
+    httpMock.verify();
+  });
+
+  it('at Site mode, no "Open at Site X" link renders even if openAtUrl were somehow set', async () => {
+    const { fixture, httpMock } = await setUp('Admin', 'Site', [{ id: 'site-1', name: 'Site A', openAtUrl: 'https://site-a.oee.local' }]);
+    const el: HTMLElement = fixture.nativeElement;
+
+    expect(el.querySelector('[data-testid="open-at-site-link"]')).toBeNull();
+
+    httpMock.verify();
+  });
 });

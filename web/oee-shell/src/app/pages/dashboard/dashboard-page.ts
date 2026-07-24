@@ -2,6 +2,7 @@ import { Component, OnDestroy, OnInit, computed, effect, signal } from '@angular
 import { TranslatePipe } from '@ngx-translate/core';
 import { AppModeService } from '../../core/app-mode/app-mode.service';
 import { MachineStatusChangedEvent, MachineStatusHubService } from '../../core/realtime/machine-status-hub.service';
+import { SyncStatusPanel } from '../../shared/sync-status/sync-status-panel';
 import { MasterDataService, ReasonCodeDto } from '../master-data/master-data.service';
 import { DashboardService, MachineStatusDto } from './dashboard.service';
 import { LossPieChart } from './loss-pie-chart';
@@ -24,13 +25,14 @@ const PULSE_DURATION_MS = 700;
 @Component({
   selector: 'app-dashboard-page',
   standalone: true,
-  imports: [TranslatePipe, MachineStatusCard, ReasonCodePicker, LossPieChart],
+  imports: [TranslatePipe, MachineStatusCard, ReasonCodePicker, LossPieChart, SyncStatusPanel],
   template: `
     @if (appMode.isCentral()) {
       <div class="dashboard-header">
         <h2>{{ 'dashboard.centralAggregateTitle' | translate }}</h2>
         <p class="dashboard-header__subtitle">{{ 'dashboard.centralAggregateSubtitle' | translate }}</p>
       </div>
+      <app-sync-status-panel />
       <app-loss-pie-chart [equipmentOptions]="[]" />
     } @else {
       <div class="dashboard-header">

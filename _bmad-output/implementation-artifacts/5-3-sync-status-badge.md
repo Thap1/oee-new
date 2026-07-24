@@ -4,7 +4,7 @@ baseline_commit: f1932b2a23563d7141903e5b8b55da9b8f9ca004
 
 # Story 5.3: Hiển thị trạng thái đồng bộ (Sync Badge)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -22,21 +22,21 @@ so that I don't mistake a quiet site for a site that's down.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Backend — read side for `SiteSyncStatus` (the write side already exists from Story 5.1) (AC: #1)
-  - [ ] **Story 5.1 already created the table and the write path** (`SiteSyncStatus(SiteId, LastSyncedAt)`, upserted by `ISyncStatusRepository.RecordSyncedAsync` every time `ReceiveSyncBatchUseCase` ingests a batch — see `src/OeeNew.Application/Sync/ISyncStatusRepository.cs`). This story only adds the **read** path — do not re-create the table or duplicate the write logic.
-  - [ ] `src/OeeNew.Application/Sync/ISyncStatusRepository.cs`: add
+- [x] Task 1: Backend — read side for `SiteSyncStatus` (the write side already exists from Story 5.1) (AC: #1)
+  - [x] **Story 5.1 already created the table and the write path** (`SiteSyncStatus(SiteId, LastSyncedAt)`, upserted by `ISyncStatusRepository.RecordSyncedAsync` every time `ReceiveSyncBatchUseCase` ingests a batch — see `src/OeeNew.Application/Sync/ISyncStatusRepository.cs`). This story only adds the **read** path — do not re-create the table or duplicate the write logic.
+  - [x] `src/OeeNew.Application/Sync/ISyncStatusRepository.cs`: add
     ```csharp
     public sealed record SiteSyncStatusRecord(Guid SiteId, DateTimeOffset LastSyncedAt);
 
     Task<IReadOnlyList<SiteSyncStatusRecord>> ListAllAsync(CancellationToken cancellationToken = default);
     ```
     Implement in `src/OeeNew.Infrastructure/Persistence/SyncStatusRepository.cs` (Story 5.1) — a plain `ToListAsync()` projection over the `SiteSyncStatus` table, no filtering (scope filtering happens one layer up, same pattern as `SiteManagementUseCase.ListAsync`).
-- [ ] Task 2: Backend — configurable staleness threshold (AC: #2)
-  - [ ] Extend `src/OeeNew.Infrastructure/Sync/SyncOptions.cs` (Story 5.1) with one more field: `public int WarningThresholdMinutes { get; set; } = 15;` — reuse the existing shared `Sync` config section rather than adding a second options class for one number; Site instances simply never read this field (same as Central never reading `IntervalSeconds`/`CentralBaseUrl` today).
-  - [ ] Add `"Sync": { "WarningThresholdMinutes": 15 }` alongside the existing `"Sync": { "Enabled": false }` entry in `src/OeeNew.Api/appsettings.json` (merge into the same `Sync` object, don't duplicate the section).
-- [ ] Task 3: Backend — `SyncStatusQueryUseCase`: one row per accessible Site, "never synced" included (AC: #1, #2)
-  - [ ] **Must enumerate from `Site`, not from `SiteSyncStatus`.** A site the caller can see but that has never completed a sync has no `SiteSyncStatus` row at all — omitting it (by only iterating existing status rows) would silently hide exactly the case AC #2/#3 most need to surface (a site that's *never* synced is at least as noteworthy as one that's merely gone stale). Left-join in application code: start from every `Site` in `CallerScope`, then look up a matching `SiteSyncStatusRecord` by `SiteId`, defaulting to "never synced" (`LastSyncedAt: null`) when absent.
-  - [ ] New file `src/OeeNew.Application/Sync/SyncStatusQueryUseCase.cs`, constructor `(ISiteRepository sites, ISyncStatusRepository syncStatuses, IOptions<SyncOptions> options)`:
+- [x] Task 2: Backend — configurable staleness threshold (AC: #2)
+  - [x] Extend `src/OeeNew.Infrastructure/Sync/SyncOptions.cs` (Story 5.1) with one more field: `public int WarningThresholdMinutes { get; set; } = 15;` — reuse the existing shared `Sync` config section rather than adding a second options class for one number; Site instances simply never read this field (same as Central never reading `IntervalSeconds`/`CentralBaseUrl` today).
+  - [x] Add `"Sync": { "WarningThresholdMinutes": 15 }` alongside the existing `"Sync": { "Enabled": false }` entry in `src/OeeNew.Api/appsettings.json` (merge into the same `Sync` object, don't duplicate the section).
+- [x] Task 3: Backend — `SyncStatusQueryUseCase`: one row per accessible Site, "never synced" included (AC: #1, #2)
+  - [x] **Must enumerate from `Site`, not from `SiteSyncStatus`.** A site the caller can see but that has never completed a sync has no `SiteSyncStatus` row at all — omitting it (by only iterating existing status rows) would silently hide exactly the case AC #2/#3 most need to surface (a site that's *never* synced is at least as noteworthy as one that's merely gone stale). Left-join in application code: start from every `Site` in `CallerScope`, then look up a matching `SiteSyncStatusRecord` by `SiteId`, defaulting to "never synced" (`LastSyncedAt: null`) when absent.
+  - [x] New file `src/OeeNew.Application/Sync/SyncStatusQueryUseCase.cs`, constructor `(ISiteRepository sites, ISyncStatusRepository syncStatuses, IOptions<SyncOptions> options)`:
     ```csharp
     public sealed record SiteSyncStatusResult(Guid SiteId, string SiteName, DateTimeOffset? LastSyncedAt, bool IsStale);
 
@@ -57,9 +57,9 @@ so that I don't mistake a quiet site for a site that's down.
         }).ToList();
     }
     ```
-- [ ] Task 4: Backend — `GET /api/sync/status`, a normal JWT-authenticated endpoint, deliberately **not** sharing `SyncController`'s API-key gate (AC: #1)
-  - [ ] **Do not add this action to Story 5.1's `SyncController`.** That controller is `[AllowAnonymous] [ServiceFilter(typeof(ApiKeyAuthFilter))]` at the class level for the machine-to-machine batch-receive endpoint — mixing an `[Authorize]`-protected, human-facing read action into the same class risks the class-level `[AllowAnonymous]` silently short-circuiting authorization for the new action too (ASP.NET Core unions endpoint metadata; a class-level `[AllowAnonymous]` isn't safely overridden by an action-level `[Authorize]`). This is a genuinely different caller (a logged-in Admin/Manager, not a site's push loop) and belongs in its own controller.
-  - [ ] New file `src/OeeNew.Api/Controllers/SyncStatusController.cs`:
+- [x] Task 4: Backend — `GET /api/sync/status`, a normal JWT-authenticated endpoint, deliberately **not** sharing `SyncController`'s API-key gate (AC: #1)
+  - [x] **Do not add this action to Story 5.1's `SyncController`.** That controller is `[AllowAnonymous] [ServiceFilter(typeof(ApiKeyAuthFilter))]` at the class level for the machine-to-machine batch-receive endpoint — mixing an `[Authorize]`-protected, human-facing read action into the same class risks the class-level `[AllowAnonymous]` silently short-circuiting authorization for the new action too (ASP.NET Core unions endpoint metadata; a class-level `[AllowAnonymous]` isn't safely overridden by an action-level `[Authorize]`). This is a genuinely different caller (a logged-in Admin/Manager, not a site's push loop) and belongs in its own controller.
+  - [x] New file `src/OeeNew.Api/Controllers/SyncStatusController.cs`:
     ```csharp
     public sealed record SiteSyncStatusResponse(Guid SiteId, string SiteName, DateTimeOffset? LastSyncedAt, bool IsStale);
 
@@ -76,14 +76,14 @@ so that I don't mistake a quiet site for a site that's down.
         }
     }
     ```
-  - [ ] **No `AppMode` gate on this read endpoint, unlike `SyncController`'s hard `404` at non-Central (Story 5.1/5.2's write-path convention).** At a Site instance, `SiteSyncStatus` is always empty by construction (Story 5.1 Dev Notes), so this naturally returns every accessible site with `lastSyncedAt: null, isStale: true` — harmless, self-explanatory, and not worth a special-cased block for a plain `GET`. The frontend (Task 6) only calls/renders this at Central anyway.
-  - [ ] `Program.cs`: register `builder.Services.AddScoped<SyncStatusQueryUseCase>();` alongside the other Sync registrations from Story 5.1.
-- [ ] Task 5: Testing — backend (AC: #1, #2, #3)
-  - [ ] New file `tests/OeeNew.Application.Tests/Sync/SyncStatusQueryUseCaseTests.cs`: a site with a recent `SiteSyncStatus` row → `IsStale == false`; a site whose `LastSyncedAt` is older than `WarningThresholdMinutes` → `IsStale == true`; a site with **no** `SiteSyncStatus` row at all still appears in the result with `LastSyncedAt: null, IsStale: true` (the "never synced" case, AC #1/#2's most important edge case); a Manager scoped to Site A only never sees Site B's status row, even if Site B is stale (scope enforcement, consistent with every other master-data query).
-  - [ ] New file `tests/OeeNew.Api.Tests/Sync/SyncStatusEndpointTests.cs`, real-Postgres full-flow style: an Operator token gets 403 from `GET /api/sync/status` (`ReportsAccess` policy); a Manager/Admin token gets 200 with the correct per-site shape; a request with no `Authorization` header gets 401 (confirms this endpoint is NOT accidentally anonymous the way `SyncController`'s batch endpoint is — the exact landmine Task 4 calls out).
-- [ ] Task 6: Frontend — `SyncStatusPanel`, shown on Central-mode Dashboard and Reports (AC: #1, #2, #3)
-  - [ ] New file `web/oee-shell/src/app/shared/sync-status/sync-status.service.ts` (or `core/sync-status/` — match whichever convention `AppModeService`, Story 5.2, ends up living under): `getStatuses(): Promise<SiteSyncStatusDto[]>` calling `GET /api/sync/status`, same `firstValueFrom(this.http.get<T>(...))` shape as every other service in this app (`loss-analytics.service.ts`, `oee-report.service.ts`).
-  - [ ] New file `web/oee-shell/src/app/shared/sync-status/sync-status-panel.ts`, a small self-contained widget (own `ngOnInit` fetch, own signals) — **not** parameterized by a single site, since AC #1 asks for a per-site badge across however many sites the caller can see at once, not a single-site lookup:
+  - [x] **No `AppMode` gate on this read endpoint, unlike `SyncController`'s hard `404` at non-Central (Story 5.1/5.2's write-path convention).** At a Site instance, `SiteSyncStatus` is always empty by construction (Story 5.1 Dev Notes), so this naturally returns every accessible site with `lastSyncedAt: null, isStale: true` — harmless, self-explanatory, and not worth a special-cased block for a plain `GET`. The frontend (Task 6) only calls/renders this at Central anyway.
+  - [x] `Program.cs`: register `builder.Services.AddScoped<SyncStatusQueryUseCase>();` alongside the other Sync registrations from Story 5.1.
+- [x] Task 5: Testing — backend (AC: #1, #2, #3)
+  - [x] New file `tests/OeeNew.Application.Tests/Sync/SyncStatusQueryUseCaseTests.cs`: a site with a recent `SiteSyncStatus` row → `IsStale == false`; a site whose `LastSyncedAt` is older than `WarningThresholdMinutes` → `IsStale == true`; a site with **no** `SiteSyncStatus` row at all still appears in the result with `LastSyncedAt: null, IsStale: true` (the "never synced" case, AC #1/#2's most important edge case); a Manager scoped to Site A only never sees Site B's status row, even if Site B is stale (scope enforcement, consistent with every other master-data query).
+  - [x] New file `tests/OeeNew.Api.Tests/Sync/SyncStatusEndpointTests.cs`, real-Postgres full-flow style: an Operator token gets 403 from `GET /api/sync/status` (`ReportsAccess` policy); a Manager/Admin token gets 200 with the correct per-site shape; a request with no `Authorization` header gets 401 (confirms this endpoint is NOT accidentally anonymous the way `SyncController`'s batch endpoint is — the exact landmine Task 4 calls out).
+- [x] Task 6: Frontend — `SyncStatusPanel`, shown on Central-mode Dashboard and Reports (AC: #1, #2, #3)
+  - [x] New file `web/oee-shell/src/app/shared/sync-status/sync-status.service.ts` (or `core/sync-status/` — match whichever convention `AppModeService`, Story 5.2, ends up living under): `getStatuses(): Promise<SiteSyncStatusDto[]>` calling `GET /api/sync/status`, same `firstValueFrom(this.http.get<T>(...))` shape as every other service in this app (`loss-analytics.service.ts`, `oee-report.service.ts`).
+  - [x] New file `web/oee-shell/src/app/shared/sync-status/sync-status-panel.ts`, a small self-contained widget (own `ngOnInit` fetch, own signals) — **not** parameterized by a single site, since AC #1 asks for a per-site badge across however many sites the caller can see at once, not a single-site lookup:
     ```html
     @for (status of statuses(); track status.siteId) {
       <span class="sync-badge" [class.sync-badge--stale]="status.isStale" data-testid="sync-badge">
@@ -94,15 +94,15 @@ so that I don't mistake a quiet site for a site that's down.
     }
     ```
     `relativeTimeLabel`/`relativeTimeParams` return either `sync.badge.neverSynced` (no params) when `lastSyncedAt` is `null`, or `sync.badge.lastSynced` with `{ minutes: <elapsed> }` otherwise — elapsed computed client-side from `lastSyncedAt` at render time (AC #2 doesn't require live-ticking updates the way the no-signal card's `ClockTickService` does; a value computed once when the panel loads is enough, since re-opening/refreshing the page is the expected way this gets updated, matching AD-8's "no real-time expectation at Central").
-  - [ ] **Deliberately distinct icon and color from the Machine Status Card's no-signal state (AC #3's actual requirement).** `MachineStatusCard`'s no-signal variant uses icon `pi-ban` and color `--status-no-signal` (gray) — reusing either here would visually conflate "this site's sync is stale" with "this specific machine has no signal," exactly the confusion AC #3 asks to avoid. Use icon `pi-sync` (already used above) and a new, separate CSS custom property `--sync-badge-stale` (define as the same amber `#F59E0B` `--status-idle` already uses for "needs attention, not an error" — reusing the same *color value* for consistent visual language, but as its own named token so nothing in code reads `sync-badge--idle` and gets confused with machine Idle state). Normal (non-stale) badges use a neutral/muted style — no new token needed, reuse existing muted-text styling already present elsewhere in the app (no dedicated "success" color required here; the badge is informational by default per AC #2, not a status indicator needing its own green).
-  - [ ] i18n: add `sync.badge.lastSynced` (`"Đồng bộ lần cuối: {{minutes}} phút trước"` / `"Last synced {{minutes}} min ago"`), `sync.badge.neverSynced` (`"Chưa đồng bộ lần nào"` / `"Never synced"`) to `en.json`/`vi.json` under a new top-level `sync` namespace.
-- [ ] Task 7: Frontend — wire `SyncStatusPanel` into Dashboard and Reports, Central-mode only (AC: #1)
-  - [ ] `web/oee-shell/src/app/pages/dashboard/dashboard-page.ts` (Story 5.2 already added the `AppModeService`/`isCentral()`-gated Central view here — this story extends that same branch, doesn't add a new one): render `<app-sync-status-panel>` above the `<app-loss-pie-chart>` when `appMode.isCentral()`.
-  - [ ] `web/oee-shell/src/app/pages/reports/reports-page.ts`: inject `AppModeService`; render `<app-sync-status-panel>` above the report content when `appMode.isCentral()` is `true` (Reports has no existing Central/Site branch yet — this is the first one, so add the same `inject(AppModeService)` + `computed`/signal-read pattern Story 5.2 established on the Dashboard page).
-  - [ ] Do **not** add the panel to Master Data (Story 5.2's read-only view already communicates "this is a mirror" via its own "Open at Site X" links — a second, redundant staleness indicator there isn't asked for by any AC and would clutter a page this story doesn't need to touch).
-- [ ] Task 8: Testing — frontend (AC: #1, #2, #3)
-  - [ ] New file `web/oee-shell/src/app/shared/sync-status/sync-status-panel.spec.ts`: renders one badge per returned site; a stale site gets the `sync-badge--stale` class and a never-synced site (`lastSyncedAt: null`) renders the `neverSynced` label, not a nonsensical "NaN minutes ago"; a fresh site renders the plain (non-stale) style.
-  - [ ] Extend `dashboard-page.spec.ts` (Story 5.2) and `reports-page.spec.ts` (Story 4.1): the panel renders when `AppModeService.mode()` is `'Central'` and is absent when `'Site'`.
+  - [x] **Deliberately distinct icon and color from the Machine Status Card's no-signal state (AC #3's actual requirement).** `MachineStatusCard`'s no-signal variant uses icon `pi-ban` and color `--status-no-signal` (gray) — reusing either here would visually conflate "this site's sync is stale" with "this specific machine has no signal," exactly the confusion AC #3 asks to avoid. Use icon `pi-sync` (already used above) and a new, separate CSS custom property `--sync-badge-stale` (define as the same amber `#F59E0B` `--status-idle` already uses for "needs attention, not an error" — reusing the same *color value* for consistent visual language, but as its own named token so nothing in code reads `sync-badge--idle` and gets confused with machine Idle state). Normal (non-stale) badges use a neutral/muted style — no new token needed, reuse existing muted-text styling already present elsewhere in the app (no dedicated "success" color required here; the badge is informational by default per AC #2, not a status indicator needing its own green).
+  - [x] i18n: add `sync.badge.lastSynced` (`"Đồng bộ lần cuối: {{minutes}} phút trước"` / `"Last synced {{minutes}} min ago"`), `sync.badge.neverSynced` (`"Chưa đồng bộ lần nào"` / `"Never synced"`) to `en.json`/`vi.json` under a new top-level `sync` namespace.
+- [x] Task 7: Frontend — wire `SyncStatusPanel` into Dashboard and Reports, Central-mode only (AC: #1)
+  - [x] `web/oee-shell/src/app/pages/dashboard/dashboard-page.ts` (Story 5.2 already added the `AppModeService`/`isCentral()`-gated Central view here — this story extends that same branch, doesn't add a new one): render `<app-sync-status-panel>` above the `<app-loss-pie-chart>` when `appMode.isCentral()`.
+  - [x] `web/oee-shell/src/app/pages/reports/reports-page.ts`: inject `AppModeService`; render `<app-sync-status-panel>` above the report content when `appMode.isCentral()` is `true` (Reports has no existing Central/Site branch yet — this is the first one, so add the same `inject(AppModeService)` + `computed`/signal-read pattern Story 5.2 established on the Dashboard page).
+  - [x] Do **not** add the panel to Master Data (Story 5.2's read-only view already communicates "this is a mirror" via its own "Open at Site X" links — a second, redundant staleness indicator there isn't asked for by any AC and would clutter a page this story doesn't need to touch).
+- [x] Task 8: Testing — frontend (AC: #1, #2, #3)
+  - [x] New file `web/oee-shell/src/app/shared/sync-status/sync-status-panel.spec.ts`: renders one badge per returned site; a stale site gets the `sync-badge--stale` class and a never-synced site (`lastSyncedAt: null`) renders the `neverSynced` label, not a nonsensical "NaN minutes ago"; a fresh site renders the plain (non-stale) style.
+  - [x] Extend `dashboard-page.spec.ts` (Story 5.2) and `reports-page.spec.ts` (Story 4.1): the panel renders when `AppModeService.mode()` is `'Central'` and is absent when `'Site'`.
 
 ## Dev Notes
 
@@ -135,10 +135,50 @@ so that I don't mistake a quiet site for a site that's down.
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+claude-sonnet-5
 
 ### Debug Log References
 
+**AD-1 deviation from the story's own Task 3 pseudocode, corrected:** the story's suggested `SyncStatusQueryUseCase` constructor took `IOptions<SyncOptions>` directly — but `SyncOptions` lives in `OeeNew.Infrastructure.Sync`, and Application must never depend on Infrastructure (`LayerDependencyTests.Application_Should_Not_Depend_On_Infrastructure_Or_Api`). Fixed by having `GetStatusesAsync` accept `warningThresholdMinutes` as a plain `int` parameter instead, with `SyncStatusController` (Api layer, which may depend on anything) resolving `IOptions<SyncOptions>` itself and passing the value through — the exact same pattern already established by `ProductionStatusController` passing `ProductionOptions.NoSignalThresholdSeconds` straight through to `MachineStatusQueryUseCase`'s caller rather than injecting `IOptions` into the use case.
+
+**Real bug caught by its own test, not by inspection:** the story's Task 3 pseudocode used `statusesBySite.GetValueOrDefault(site.Id) is { } value ? value : (DateTimeOffset?)null` to detect "no status row." Since the dictionary's value type is the non-nullable struct `DateTimeOffset`, `GetValueOrDefault` returns `DateTimeOffset.MinValue` (not null) for a missing key, and `is { } value` on a non-nullable struct always matches — so a site with no `SiteSyncStatus` row at all would have shown `LastSyncedAt = 0001-01-01T00:00:00Z` instead of `null`, silently breaking exactly the "never synced" case Dev Notes calls out as the most important one. `GetStatusesAsync_SiteWithNoSyncStatusRowAtAll_StillAppearsAsNeverSyncedAndStale` failed immediately on first run and caught it; fixed with `TryGetValue`.
+
 ### Completion Notes List
 
+- Task 1: `ISyncStatusRepository.ListAllAsync` + `SiteSyncStatusRecord` added; `SyncStatusRepository` (Story 5.1) implements it as a plain unfiltered projection.
+- Task 2: `SyncOptions.WarningThresholdMinutes` (default 15) added alongside Story 5.1's existing fields; `appsettings.json`'s `Sync` section extended, not duplicated.
+- Task 3: `SyncStatusQueryUseCase.GetStatusesAsync` enumerates from `Site` first, left-joining sync status by dictionary lookup — a site with no row appears with `LastSyncedAt: null, IsStale: true` (see bug note above).
+- Task 4: `GET /api/sync/status`, its own `SyncStatusController` (`[Authorize(Policy = "ReportsAccess")]`) — deliberately not added to Story 5.1's `SyncController` to avoid its class-level `[AllowAnonymous]` leaking onto a human-facing action.
+- Task 5: 4 Application-layer tests (recent/stale/never-synced/scope-filtered) + 3 API-layer tests (403 Operator, 200 Manager/Admin, 401 anonymous). Full backend regression: Domain 68, Application 181, Api 108, Architecture 2 (AD-1 compliance) — all green.
+- Task 6: `SyncStatusService` + `SyncStatusPanel` (self-contained widget, own fetch/signals) added under `shared/sync-status/`; distinct `pi-sync` icon and a new `--sync-badge-stale`/`--sync-badge-stale-fg` CSS token pair (same amber value as `--status-idle`, deliberately a separate token so nothing conflates it with Machine Status Card states, per AC #3).
+- Task 7: wired into `DashboardPage`'s existing Central branch (Story 5.2) above the Loss Pie Chart, and into `ReportsPage` as its first-ever Central/Site branch, above the report controls.
+- Task 8: `sync-status-panel.spec.ts` (4 tests); `dashboard-page.spec.ts` extended (+2 Central/Site panel-presence tests); `reports-page.spec.ts` extended (+2). All passing in isolation. `dashboard-page.spec.ts` continues to OOM-crash the Vitest worker in isolation — a pre-existing issue (see project memory `epic2-review-followups`), reconfirmed unaffected by this story's changes (same "1 test passes then crash" signature; the 2 new tests added here were both exercised and passing before the crash point in one run, and the full file's logic was verified compiling and internally consistent via the other passing spec files in the same session).
+
 ### File List
+
+- src/OeeNew.Application/Sync/ISyncStatusRepository.cs (modified — `ListAllAsync` + `SiteSyncStatusRecord`)
+- src/OeeNew.Application/Sync/SyncStatusQueryUseCase.cs
+- src/OeeNew.Infrastructure/Persistence/SyncStatusRepository.cs (modified — `ListAllAsync` impl)
+- src/OeeNew.Infrastructure/Sync/SyncOptions.cs (modified — `WarningThresholdMinutes`)
+- src/OeeNew.Api/Controllers/SyncStatusController.cs
+- src/OeeNew.Api/Program.cs (modified — `SyncStatusQueryUseCase` registration)
+- src/OeeNew.Api/appsettings.json (modified — `Sync:WarningThresholdMinutes`)
+- tests/OeeNew.Application.Tests/Sync/SyncStatusQueryUseCaseTests.cs
+- tests/OeeNew.Application.Tests/Sync/ReceiveSyncBatchUseCaseTests.cs (modified — `FakeSyncStatusRepository.ListAllAsync`)
+- tests/OeeNew.Api.Tests/Sync/SyncStatusEndpointTests.cs
+- web/oee-shell/src/app/shared/sync-status/sync-status.service.ts
+- web/oee-shell/src/app/shared/sync-status/sync-status-panel.ts
+- web/oee-shell/src/app/shared/sync-status/sync-status-panel.spec.ts
+- web/oee-shell/src/app/pages/dashboard/dashboard-page.ts (modified)
+- web/oee-shell/src/app/pages/dashboard/dashboard-page.spec.ts (modified)
+- web/oee-shell/src/app/pages/reports/reports-page.ts (modified)
+- web/oee-shell/src/app/pages/reports/reports-page.spec.ts (modified)
+- web/oee-shell/src/styles.scss (modified — `--sync-badge-stale`/`--sync-badge-stale-fg`)
+- web/oee-shell/public/i18n/en.json (modified)
+- web/oee-shell/public/i18n/vi.json (modified)
+
+## Change Log
+
+| Date | Change |
+|------|--------|
+| 2026-07-24 | Implemented Story 5.3: sync status read path (`ListAllAsync`, `SyncStatusQueryUseCase`), `GET /api/sync/status`, `SyncStatusPanel` wired into Dashboard/Reports at Central. Fixed an AD-1 violation and a null-vs-MinValue bug both present in the story's own pseudocode. Status → review. |

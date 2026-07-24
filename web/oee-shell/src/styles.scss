@@ -38,6 +38,12 @@ body {
   --status-no-signal: #6b7280;
   --status-no-signal-fg: #ffffff;
 
+  /* Story 5.3: same amber value as --status-idle, but its own token — the sync badge must never be
+     confused with the Machine Status Card's no-signal state (AC #3), so it deliberately does not
+     reuse --status-idle/--status-no-signal by name even though the color happens to match idle's. */
+  --sync-badge-stale: #f59e0b;
+  --sync-badge-stale-fg: #1a1208;
+
   --shopfloor-display-size: 56px;
   --shopfloor-label-size: 20px;
 

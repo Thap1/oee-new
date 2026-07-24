@@ -141,5 +141,11 @@
       "usernameTaken": "That username is already taken.",
       "generic": "Something went wrong. Please try again."
     }
+  },
+  "sync": {
+    "badge": {
+      "lastSynced": "Last synced {{minutes}} min ago",
+      "neverSynced": "Never synced"
+    }
   }
 }

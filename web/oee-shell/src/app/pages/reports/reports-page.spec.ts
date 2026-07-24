@@ -80,10 +80,11 @@ describe('ReportsPage', () => {
 
   afterEach(() => httpMock.verify());
 
-  function create() {
+  function create(appMode: 'Site' | 'Central' = 'Site') {
     const fixture = TestBed.createComponent(ReportsPage);
     fixture.detectChanges();
     httpMock.expectOne('/i18n/vi.json').flush(I18N_VI);
+    httpMock.expectOne('/api/app-mode').flush({ mode: appMode });
     fixture.detectChanges();
     return fixture;
   }
@@ -385,5 +386,29 @@ describe('ReportsPage', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('[data-testid="reports-context-hint"]')).toBeNull();
+  });
+
+  it('renders the sync status panel when AppModeService.mode() is Central', async () => {
+    const fixture = create('Central');
+    httpMock.expectOne((r) => oeeReportRequest(r)).flush(report());
+    // AppModeService's signal write happens on the microtask after the /api/app-mode flush inside
+    // create() (a plain sync function), not within create()'s own synchronous call — so the @if
+    // gating <app-sync-status-panel> doesn't flip to true until this flush + detectChanges.
+    await flushMicrotasks();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/sync/status').flush([]);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('app-sync-status-panel')).toBeTruthy();
+  });
+
+  it('does not render the sync status panel when AppModeService.mode() is Site', async () => {
+    const fixture = create('Site');
+    httpMock.expectOne((r) => oeeReportRequest(r)).flush(report());
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('app-sync-status-panel')).toBeNull();
   });
 });

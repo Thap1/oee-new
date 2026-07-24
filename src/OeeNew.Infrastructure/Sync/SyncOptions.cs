@@ -14,4 +14,7 @@ public sealed class SyncOptions
     public string? CentralBaseUrl { get; set; }
     public string? ApiKey { get; set; }
     public int IntervalSeconds { get; set; } = 60;
+
+    /// <summary>Central-only (Story 5.3): how long since a Site's last successful sync before its badge flips to the stale/warning style. Site instances never read this field, same as Central never reading <see cref="IntervalSeconds"/>/<see cref="CentralBaseUrl"/>.</summary>
+    public int WarningThresholdMinutes { get; set; } = 15;
 }

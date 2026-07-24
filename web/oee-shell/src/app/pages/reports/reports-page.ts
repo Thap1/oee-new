@@ -3,7 +3,9 @@ import { FormsModule } from '@angular/forms';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { DatePicker } from 'primeng/datepicker';
 import { SelectModule } from 'primeng/select';
+import { AppModeService } from '../../core/app-mode/app-mode.service';
 import { ScopeService } from '../../core/scope/scope.service';
+import { SyncStatusPanel } from '../../shared/sync-status/sync-status-panel';
 import { MachineDto, MasterDataService, ShiftScheduleDto } from '../master-data/master-data.service';
 import { OeeReportDto, OeeReportService, ReportFilterTargetType, ReportPeriodType } from './oee-report.service';
 
@@ -18,10 +20,13 @@ import { OeeReportDto, OeeReportService, ReportFilterTargetType, ReportPeriodTyp
 @Component({
   selector: 'app-reports-page',
   standalone: true,
-  imports: [FormsModule, TranslatePipe, SelectModule, DatePicker],
+  imports: [FormsModule, TranslatePipe, SelectModule, DatePicker, SyncStatusPanel],
   template: `
     <div class="reports-page" data-testid="reports-page">
       <h2>{{ 'reports.title' | translate }}</h2>
+      @if (appMode.isCentral()) {
+        <app-sync-status-panel />
+      }
       <div class="reports-page__controls">
         <p-select
           [options]="periodTypeOptions()"
@@ -190,6 +195,7 @@ export class ReportsPage implements OnInit {
     private readonly masterData: MasterDataService,
     private readonly scope: ScopeService,
     private readonly translate: TranslateService,
+    readonly appMode: AppModeService,
   ) {
     // Re-fetch this Site's Shift options whenever the topbar's Site/Line selector changes, so a
     // Shift picked before a Site switch never lingers stale (mirrors ScopeService consumers elsewhere).
@@ -220,6 +226,7 @@ export class ReportsPage implements OnInit {
   }
 
   ngOnInit(): void {
+    void this.appMode.load();
     void this.refetchReport();
   }
 

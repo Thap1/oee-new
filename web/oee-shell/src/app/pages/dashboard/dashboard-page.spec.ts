@@ -54,11 +54,14 @@ describe('DashboardPage', () => {
 
   async function createDashboard(machines: unknown[], noSignalThresholdSeconds = 60) {
     const fixture = TestBed.createComponent(DashboardPage);
-    httpMock.expectOne('/i18n/vi.json').flush(I18N_VI);
     fixture.detectChanges();
-
-    await flushMicrotasks();
+    // The top-level @if(appMode.isCentral()) block (Story 5.2) makes every child — including the
+    // i18n-driven header — a lazily-instantiated control-flow view, so nothing (translate pipe
+    // included) fires its HTTP request until after this first detectChanges(), unlike a plain
+    // always-present template root.
+    httpMock.expectOne('/i18n/vi.json').flush(I18N_VI);
     httpMock.expectOne('/api/app-mode').flush({ mode: 'Site' });
+
     await flushMicrotasks();
     httpMock.expectOne('/api/production/machine-states').flush({ noSignalThresholdSeconds, machines });
     await flushMicrotasks();
@@ -69,11 +72,14 @@ describe('DashboardPage', () => {
 
   async function createCentralDashboard() {
     const fixture = TestBed.createComponent(DashboardPage);
-    httpMock.expectOne('/i18n/vi.json').flush(I18N_VI);
     fixture.detectChanges();
+    httpMock.expectOne('/i18n/vi.json').flush(I18N_VI);
+    httpMock.expectOne('/api/app-mode').flush({ mode: 'Central' });
 
     await flushMicrotasks();
-    httpMock.expectOne('/api/app-mode').flush({ mode: 'Central' });
+    fixture.detectChanges();
+    // The Central branch's <app-sync-status-panel> (Story 5.3) fetches its own data on init.
+    httpMock.expectOne('/api/sync/status').flush([]);
     await flushMicrotasks();
     fixture.detectChanges();
 
@@ -217,5 +223,17 @@ describe('DashboardPage', () => {
     const fixture = await createCentralDashboard();
 
     expect(fixture.nativeElement.querySelector('app-loss-pie-chart')).toBeTruthy();
+  });
+
+  it('at Central mode, renders the sync status panel', async () => {
+    const fixture = await createCentralDashboard();
+
+    expect(fixture.nativeElement.querySelector('app-sync-status-panel')).toBeTruthy();
+  });
+
+  it('at Site mode, does not render the sync status panel', async () => {
+    const fixture = await createDashboard([]);
+
+    expect(fixture.nativeElement.querySelector('app-sync-status-panel')).toBeNull();
   });
 });

@@ -97,6 +97,8 @@ builder.Services.AddScoped<RecordQualityRejectUseCase>();
 
 // Opt-in (Production:SimulateSignal): fake a live PLC/gateway feed for demo/deploy environments so
 // seeded machines don't all drift into no-signal a minute after boot — see db/init/02_seed.sql.
+// Production:RandomizeStatus additionally fabricates a changing status each tick (demo data) instead
+// of a plain heartbeat — see DemoSignalSimulatorHostedService.
 if (builder.Configuration.GetValue<bool>("Production:SimulateSignal"))
 {
     builder.Services.AddHostedService<DemoSignalSimulatorHostedService>();
@@ -109,6 +111,9 @@ builder.Services.AddScoped<ISyncIngestRepository, SyncIngestRepository>();
 builder.Services.AddScoped<ISyncStatusRepository, SyncStatusRepository>();
 builder.Services.AddScoped<ReceiveSyncBatchUseCase>();
 builder.Services.AddScoped<ApiKeyAuthFilter>();
+// Sync status badge (Story 5.3, UX-DR11): human-facing read endpoint, unconditionally registered like
+// the rest of the Sync receive path — SyncStatusController itself needs no AppMode guard (see its own doc comment).
+builder.Services.AddScoped<SyncStatusQueryUseCase>();
 
 // Opt-in (Sync:Enabled) push loop, Site-mode only: most dev/demo runs are a single standalone instance
 // with no reachable Central counterpart, so this must not run unconditionally.

@@ -16,13 +16,20 @@ internal sealed class FakeSyncIngestRepository : ISyncIngestRepository
 
 internal sealed class FakeSyncStatusRepository : ISyncStatusRepository
 {
+    private readonly Dictionary<Guid, DateTimeOffset> _statusBySite = new();
+
     public List<(Guid SiteId, DateTimeOffset SyncedAt)> Recorded { get; } = [];
 
     public Task RecordSyncedAsync(Guid siteId, DateTimeOffset syncedAt, CancellationToken cancellationToken = default)
     {
         Recorded.Add((siteId, syncedAt));
+        _statusBySite[siteId] = syncedAt;
         return Task.CompletedTask;
     }
+
+    public Task<IReadOnlyList<SiteSyncStatusRecord>> ListAllAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<SiteSyncStatusRecord>>(
+            _statusBySite.Select(kvp => new SiteSyncStatusRecord(kvp.Key, kvp.Value)).ToList());
 }
 
 public class ReceiveSyncBatchUseCaseTests

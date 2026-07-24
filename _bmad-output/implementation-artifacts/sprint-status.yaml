@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-18
-last_updated: 2026-07-23 (Story 5.1 implemented, status review)
+last_updated: 2026-07-24 (Story 5.3 implemented, status review — all Epic 5 stories now in review)
 project: oee-new
 project_key: NOKEY
 tracking_system: file-system
@@ -79,6 +79,6 @@ development_status:
 
   epic-5: in-progress
   5-1-site-to-central-sync: review
-  5-2-central-cross-site-dashboard: ready-for-dev
-  5-3-sync-status-badge: ready-for-dev
+  5-2-central-cross-site-dashboard: review
+  5-3-sync-status-badge: review
   epic-5-retrospective: optional

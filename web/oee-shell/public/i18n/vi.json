@@ -141,5 +141,11 @@
       "usernameTaken": "Tên đăng nhập đã được sử dụng.",
       "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
     }
+  },
+  "sync": {
+    "badge": {
+      "lastSynced": "Đồng bộ lần cuối: {{minutes}} phút trước",
+      "neverSynced": "Chưa đồng bộ lần nào"
+    }
   }
 }

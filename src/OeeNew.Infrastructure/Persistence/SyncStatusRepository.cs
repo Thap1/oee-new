@@ -19,4 +19,9 @@ public sealed class SyncStatusRepository(OeeDbContext context) : ISyncStatusRepo
 
         await context.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<SiteSyncStatusRecord>> ListAllAsync(CancellationToken cancellationToken = default) =>
+        await context.SiteSyncStatuses
+            .Select(s => new SiteSyncStatusRecord(s.SiteId, s.LastSyncedAt))
+            .ToListAsync(cancellationToken);
 }
