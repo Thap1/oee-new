@@ -7,9 +7,9 @@
 -- cross-site scoping (Manager/Operator/Viewer per Site) and the Central cross-site dashboard.
 --
 -- Sample user passwords (for local/demo use only — rotate before any shared environment):
---   manager1/manager2/manager3   / Passw0rd!
---   operator1/operator2/operator3 / Passw0rd!
---   viewer1/viewer2/viewer3      / Passw0rd!
+--   manager1/manager2/manager3   / admin
+--   operator1/operator2/operator3 / admin
+--   viewer1/viewer2/viewer3      / admin
 --   admin                        / ChangeMe123!
 -- (Admin login uses the config-driven bootstrap admin — see appsettings "BootstrapAdmin" — not a User row.)
 --
@@ -85,35 +85,35 @@ INSERT INTO "ReasonCode" ("Id", "SiteId", "Name", "LossCategory", "IsActive") VA
     ('00000000-0000-0000-0000-000000000511', '00000000-0000-0000-0000-000000000103', 'Lỗi chất lượng / Quality Defect', 2, true)
 ON CONFLICT ("Id") DO NOTHING;
 
--- Users (password hashes are ASP.NET Core Identity PasswordHasher<T> output for "Passw0rd!").
+-- Users (password hashes are ASP.NET Core Identity PasswordHasher<T> output for "admin").
 -- One Manager/Operator/Viewer per Site so every Site has a full scoped-role demo set.
 INSERT INTO "User" ("Id", "Username", "Role", "PasswordHash", "SiteIds", "LineIds") VALUES
     ('00000000-0000-0000-0000-000000000601', 'manager1', 'Manager',
-     'AQAAAAIAAYagAAAAEJtTPE/YL0lrm4WkpWjr5va/QtrRVZmuoknVKA6McacbSS3hrltXrbXeEpnaLsZR6g==',
+     'AQAAAAIAAYagAAAAENy+4fORFO9SQXw50VkFkVqks+NZpF8HroV2BqvDx7U6cBDz4glDaHIyphdmrHiotg==',
      ARRAY['00000000-0000-0000-0000-000000000101']::uuid[], ARRAY[]::uuid[]),
     ('00000000-0000-0000-0000-000000000602', 'operator1', 'Operator',
-     'AQAAAAIAAYagAAAAEMFzY7deaKhmM0pQzM2ZmfhvrUNO3Bnjx7lOcFHMcZ7NlRH3BK2CZ24XHQVwr3k2hQ==',
+     'AQAAAAIAAYagAAAAENy+4fORFO9SQXw50VkFkVqks+NZpF8HroV2BqvDx7U6cBDz4glDaHIyphdmrHiotg==',
      ARRAY['00000000-0000-0000-0000-000000000101']::uuid[], ARRAY['00000000-0000-0000-0000-000000000201']::uuid[]),
     ('00000000-0000-0000-0000-000000000603', 'viewer1', 'Viewer',
-     'AQAAAAIAAYagAAAAEMQWgv2o03+isyhfH8P/3TW8owt2L+7G4ghln3ZAm85ZoHtnldlbp5ldlEFqG58oNw==',
+     'AQAAAAIAAYagAAAAENy+4fORFO9SQXw50VkFkVqks+NZpF8HroV2BqvDx7U6cBDz4glDaHIyphdmrHiotg==',
      ARRAY['00000000-0000-0000-0000-000000000102']::uuid[], ARRAY[]::uuid[]),
     ('00000000-0000-0000-0000-000000000604', 'manager2', 'Manager',
-     'AQAAAAIAAYagAAAAEJtTPE/YL0lrm4WkpWjr5va/QtrRVZmuoknVKA6McacbSS3hrltXrbXeEpnaLsZR6g==',
+     'AQAAAAIAAYagAAAAENy+4fORFO9SQXw50VkFkVqks+NZpF8HroV2BqvDx7U6cBDz4glDaHIyphdmrHiotg==',
      ARRAY['00000000-0000-0000-0000-000000000102']::uuid[], ARRAY[]::uuid[]),
     ('00000000-0000-0000-0000-000000000605', 'operator2', 'Operator',
-     'AQAAAAIAAYagAAAAEMFzY7deaKhmM0pQzM2ZmfhvrUNO3Bnjx7lOcFHMcZ7NlRH3BK2CZ24XHQVwr3k2hQ==',
+     'AQAAAAIAAYagAAAAENy+4fORFO9SQXw50VkFkVqks+NZpF8HroV2BqvDx7U6cBDz4glDaHIyphdmrHiotg==',
      ARRAY['00000000-0000-0000-0000-000000000102']::uuid[], ARRAY['00000000-0000-0000-0000-000000000203']::uuid[]),
     ('00000000-0000-0000-0000-000000000606', 'viewer2', 'Viewer',
-     'AQAAAAIAAYagAAAAEMQWgv2o03+isyhfH8P/3TW8owt2L+7G4ghln3ZAm85ZoHtnldlbp5ldlEFqG58oNw==',
+     'AQAAAAIAAYagAAAAENy+4fORFO9SQXw50VkFkVqks+NZpF8HroV2BqvDx7U6cBDz4glDaHIyphdmrHiotg==',
      ARRAY['00000000-0000-0000-0000-000000000101']::uuid[], ARRAY[]::uuid[]),
     ('00000000-0000-0000-0000-000000000607', 'manager3', 'Manager',
-     'AQAAAAIAAYagAAAAEJtTPE/YL0lrm4WkpWjr5va/QtrRVZmuoknVKA6McacbSS3hrltXrbXeEpnaLsZR6g==',
+     'AQAAAAIAAYagAAAAENy+4fORFO9SQXw50VkFkVqks+NZpF8HroV2BqvDx7U6cBDz4glDaHIyphdmrHiotg==',
      ARRAY['00000000-0000-0000-0000-000000000103']::uuid[], ARRAY[]::uuid[]),
     ('00000000-0000-0000-0000-000000000608', 'operator3', 'Operator',
-     'AQAAAAIAAYagAAAAEMFzY7deaKhmM0pQzM2ZmfhvrUNO3Bnjx7lOcFHMcZ7NlRH3BK2CZ24XHQVwr3k2hQ==',
+     'AQAAAAIAAYagAAAAENy+4fORFO9SQXw50VkFkVqks+NZpF8HroV2BqvDx7U6cBDz4glDaHIyphdmrHiotg==',
      ARRAY['00000000-0000-0000-0000-000000000103']::uuid[], ARRAY['00000000-0000-0000-0000-000000000205']::uuid[]),
     ('00000000-0000-0000-0000-000000000609', 'viewer3', 'Viewer',
-     'AQAAAAIAAYagAAAAEMQWgv2o03+isyhfH8P/3TW8owt2L+7G4ghln3ZAm85ZoHtnldlbp5ldlEFqG58oNw==',
+     'AQAAAAIAAYagAAAAENy+4fORFO9SQXw50VkFkVqks+NZpF8HroV2BqvDx7U6cBDz4glDaHIyphdmrHiotg==',
      ARRAY['00000000-0000-0000-0000-000000000103']::uuid[], ARRAY[]::uuid[])
 ON CONFLICT ("Id") DO NOTHING;
 
