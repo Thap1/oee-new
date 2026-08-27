@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, computed, effect, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, effect, signal, untracked } from '@angular/core';
 import { TranslatePipe } from '@ngx-translate/core';
 import { AppModeService } from '../../core/app-mode/app-mode.service';
 import { MachineStatusChangedEvent, MachineStatusHubService } from '../../core/realtime/machine-status-hub.service';
@@ -182,16 +182,21 @@ export class DashboardPage implements OnInit, OnDestroy {
     private readonly hub: MachineStatusHubService,
     readonly appMode: AppModeService,
   ) {
+    // `untracked` is load-bearing, not a tidiness nicety: applying an event reads `machinesSignal()`
+    // and then writes it back. Without this, that read registers as a dependency of the effect, the
+    // write immediately invalidates it, and the effect re-runs forever — allocating a fresh array,
+    // Set and setTimeout on every pass until the browser tab runs out of memory (~1 minute).
+    // The effect must depend on the hub signal alone.
     effect(() => {
       const event = this.hub.lastEvent();
       if (event) {
-        this.applyEvent(event);
+        untracked(() => this.applyEvent(event));
       }
     });
     effect(() => {
       const batch = this.hub.lastBatch();
       if (batch) {
-        this.applyBatch(batch);
+        untracked(() => this.applyBatch(batch));
       }
     });
   }
