@@ -479,4 +479,48 @@ public class OeeReportQueryUseCaseTests
         Assert.Equal(0, result.OeePercent);
         Assert.Equal(0, result.QualityRejectQuantity);
     }
+
+    [Fact]
+    public async Task GetDailyTrendAsync_ReturnsOnePointPerDay_BucketedByUtcCalendarDay()
+    {
+        var machines = new FakeMachineRepository();
+        var lines = new FakeLineRepository();
+        var shifts = new FakeShiftScheduleRepository();
+        var downtimeEvents = new FakeDowntimeEventRepository();
+        var qualityRejects = new FakeQualityRejectRepository();
+        var siteId = Guid.NewGuid();
+        var lineId = lines.Seed("Line A", siteId);
+        var machineId = machines.Seed("Machine A", lineId, siteId);
+
+        // 8640s = 10% of one machine-day, on the middle day only.
+        downtimeEvents.SeedClosed(machineId, LossCategory.AvailabilityLoss, 8_640, new DateTimeOffset(2026, 7, 19, 0, 0, 0, TimeSpan.Zero));
+
+        var useCase = BuildUseCase(machines, lines, shifts, downtimeEvents, qualityRejects);
+        var points = await useCase.GetDailyTrendAsync(CallerScope.Global, new DateOnly(2026, 7, 20), days: 3);
+
+        Assert.Equal(3, points.Count);
+        Assert.Equal(new DateOnly(2026, 7, 18), points[0].Date);
+        Assert.Equal(new DateOnly(2026, 7, 20), points[2].Date);
+        Assert.Equal(1.0, points[0].AvailabilityPercent);
+        Assert.Equal(0.9, points[1].AvailabilityPercent, precision: 6);
+        Assert.Equal(0.9, points[1].OeePercent, precision: 6);
+        Assert.Equal(1.0, points[2].AvailabilityPercent);
+    }
+
+    [Fact]
+    public async Task GetDailyTrendAsync_EmptyScope_ReturnsZeroedPoints_NotException()
+    {
+        var machines = new FakeMachineRepository();
+        var lines = new FakeLineRepository();
+        var shifts = new FakeShiftScheduleRepository();
+        var downtimeEvents = new FakeDowntimeEventRepository();
+        var qualityRejects = new FakeQualityRejectRepository();
+        var emptyScope = new CallerScope(false, [], []);
+
+        var useCase = BuildUseCase(machines, lines, shifts, downtimeEvents, qualityRejects);
+        var points = await useCase.GetDailyTrendAsync(emptyScope, new DateOnly(2026, 7, 20), days: 7);
+
+        Assert.Equal(7, points.Count);
+        Assert.All(points, p => Assert.Equal(0, p.OeePercent));
+    }
 }

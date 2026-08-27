@@ -40,6 +40,45 @@
       "title": "Record Quality Reject",
       "quantity": "Quantity",
       "submit": "Save"
+    },
+    "range": {
+      "days": "{{days}} days"
+    },
+    "stat": {
+      "running": "Machines running",
+      "vsPreviousDay": "vs previous day",
+      "today": "today",
+      "fleet": "Machines in scope",
+      "runningStopped": "{{running}} running · {{stopped}} stopped",
+      "reportsRestricted": "OEE reports require Manager access"
+    },
+    "trend": {
+      "title": "OEE trend",
+      "subtitle": "Last {{days}} days, by calendar day (UTC)",
+      "empty": "No trend data for this period yet.",
+      "series": {
+        "oee": "OEE",
+        "availability": "Availability",
+        "performance": "Performance",
+        "quality": "Quality"
+      }
+    },
+    "machineTable": {
+      "title": "Machine status",
+      "subtitle": "{{total}} machines in your scope, live",
+      "machine": "Machine",
+      "status": "Status",
+      "counter": "Counter",
+      "lastReported": "Last reported",
+      "awaitingSignal": "Awaiting signal",
+      "noMatch": "No machines match this filter.",
+      "filter": {
+        "all": "All",
+        "Running": "Running",
+        "Stopped": "Stopped",
+        "Idle": "Idle",
+        "Fault": "Fault"
+      }
     }
   },
   "downtime": {

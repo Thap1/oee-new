@@ -23,6 +23,13 @@ public sealed record OeeReportResponse(
     string? TopDowntimeReasonName,
     long? TopDowntimeReasonSeconds);
 
+public sealed record OeeTrendPointResponse(
+    DateOnly Date,
+    double AvailabilityPercent,
+    double PerformancePercent,
+    double QualityPercent,
+    double OeePercent);
+
 /// <summary>Aggregated OEE report by Shift/Day/Week (Story 4.1, FR-016). Manager/Viewer/Admin only — Operator is excluded (AC #3).</summary>
 [ApiController]
 [Authorize(Policy = "ReportsAccess")]
@@ -84,5 +91,38 @@ public sealed class ReportsController(OeeReportQueryUseCase reportUseCase) : Con
             result.TopDowntimeReasonCodeId,
             result.TopDowntimeReasonName,
             result.TopDowntimeReasonSeconds));
+    }
+
+    /// <summary>Daily OEE trend for the Dashboard's line chart — the <paramref name="days"/>-day window ending on <paramref name="endDate"/> (inclusive).</summary>
+    [HttpGet("api/reports/oee/trend")]
+    public async Task<ActionResult<IReadOnlyList<OeeTrendPointResponse>>> GetOeeTrend(
+        [FromQuery] DateOnly endDate, [FromQuery] int days,
+        [FromQuery] ReportFilterTargetType? filterType, [FromQuery] Guid? filterId, CancellationToken cancellationToken)
+    {
+        if (days is < 1 or > 90)
+        {
+            return BadRequest(new ApiErrorResponse { Code = "VALIDATION_ERROR", Message = "days must be between 1 and 90." });
+        }
+
+        // Same out-of-range-enum and paired-argument guards as GetOeeReport above — see the comment there.
+        if (filterType is { } definedFilterType && !Enum.IsDefined(definedFilterType))
+        {
+            return BadRequest(new ApiErrorResponse { Code = "VALIDATION_ERROR", Message = "filterType is not a recognized value." });
+        }
+
+        if (filterType.HasValue != filterId.HasValue)
+        {
+            return BadRequest(new ApiErrorResponse
+            {
+                Code = "VALIDATION_ERROR",
+                Message = "filterType and filterId must be provided together.",
+            });
+        }
+
+        var points = await reportUseCase.GetDailyTrendAsync(
+            User.GetCallerScope(), endDate, days, filterType, filterId, cancellationToken);
+        return Ok(points
+            .Select(p => new OeeTrendPointResponse(p.Date, p.AvailabilityPercent, p.PerformancePercent, p.QualityPercent, p.OeePercent))
+            .ToList());
     }
 }

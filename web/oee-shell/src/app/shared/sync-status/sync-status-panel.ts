@@ -15,7 +15,7 @@ interface SyncBadgeViewModel {
  * Loss Pie Chart (Dashboard) and Reports, above whatever cross-site content those pages already render.
  * Self-contained widget with its own fetch/signals, same shape as `LossPieChart`/`LossAnalyticsService`.
  * Elapsed time is computed once at load, not live-ticking (AD-8: no real-time expectation at Central) —
- * unlike `MachineStatusCard`'s `ClockTickService`-driven no-signal label, which is a genuine real-time concern.
+ * unlike `MachineStatusTable`'s `ClockTickService`-driven no-signal label, which is a genuine real-time concern.
  */
 @Component({
   selector: 'app-sync-status-panel',

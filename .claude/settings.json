@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=8192\" npx ng test --watch=false --include=\"**/dashboard-page.spec.ts\")",
+      "Bash(git log *)",
+      "Bash(powershell -Command \"Get-Process node -ErrorAction SilentlyContinue | Select-Object Id,WorkingSet64,StartTime\")",
+      "Bash(git commit -m ' *)",
+      "Bash(python \"/c/Users/HOANGT~1/AppData/Local/Temp/claude/d--Project-oee-new/5efb449a-bbfc-4755-b580-de637c48a284/scratchpad/gen_seed.py\" > \"/c/Users/HOANGT~1/AppData/Local/Temp/claude/d--Project-oee-new/5efb449a-bbfc-4755-b580-de637c48a284/scratchpad/02_seed_new.sql\" 2>\"/c/Users/HOANGT~1/AppData/Local/Temp/claude/d--Project-oee-new/5efb449a-bbfc-4755-b580-de637c48a284/scratchpad/gen_stderr.txt\"; cat \"/c/Users/HOANGT~1/AppData/Local/Temp/claude/d--Project-oee-new/5efb449a-bbfc-4755-b580-de637c48a284/scratchpad/gen_stderr.txt\"; wc -l \"/c/Users/HOANGT~1/AppData/Local/Temp/claude/d--Project-oee-new/5efb449a-bbfc-4755-b580-de637c48a284/scratchpad/02_seed_new.sql\")",
+      "Bash(cp \"/c/Users/HOANGT~1/AppData/Local/Temp/claude/d--Project-oee-new/5efb449a-bbfc-4755-b580-de637c48a284/scratchpad/02_seed_new.sql\" \"/d/Project/oee-new/db/init/02_seed.sql\" *)",
+      "Bash(env)",
+      "Bash(rm -f \"/c/Users/HOANGT~1/AppData/Local/Temp/claude/d--Project-oee-new/5efb449a-bbfc-4755-b580-de637c48a284/scratchpad/gen_seed.py\" \"/c/Users/HOANGT~1/AppData/Local/Temp/claude/d--Project-oee-new/5efb449a-bbfc-4755-b580-de637c48a284/scratchpad/02_seed_new.sql\" \"/c/Users/HOANGT~1/AppData/Local/Temp/claude/d--Project-oee-new/5efb449a-bbfc-4755-b580-de637c48a284/scratchpad/gen_stderr.txt\")",
+      "Bash(git -C \"/d/Project/oee-new\" log --oneline -i --grep=\"render\")",
+      "Bash(npx prettier *)",
+      "Bash(git checkout *)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\HOANGT~1\\AppData\\Local\\Temp\\claude\\d--Project-oee-new\\5efb449a-bbfc-4755-b580-de637c48a284\\scratchpad"
+    ]
+  }
+}

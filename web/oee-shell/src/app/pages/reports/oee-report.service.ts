@@ -23,6 +23,14 @@ export interface OeeReportDto {
   topDowntimeReasonSeconds: number | null;
 }
 
+export interface OeeTrendPointDto {
+  date: string;
+  availabilityPercent: number;
+  performancePercent: number;
+  qualityPercent: number;
+  oeePercent: number;
+}
+
 /** yyyy-MM-dd in the browser's local calendar — the backend interprets it as a UTC calendar date (same convention as `loss-analytics.service.ts`'s `toDateParam`). */
 function toDateParam(date: Date): string {
   const year = date.getFullYear();
@@ -52,5 +60,11 @@ export class OeeReportService {
       params.set('filterId', filterId);
     }
     return firstValueFrom(this.http.get<OeeReportDto>(`/api/reports/oee?${params.toString()}`));
+  }
+
+  /** One point per UTC calendar day over the `days`-day window ending on `endDate` — the Dashboard's trend line. */
+  getDailyTrend(endDate: Date, days: number): Promise<OeeTrendPointDto[]> {
+    const params = new URLSearchParams({ endDate: toDateParam(endDate), days: String(days) });
+    return firstValueFrom(this.http.get<OeeTrendPointDto[]>(`/api/reports/oee/trend?${params.toString()}`));
   }
 }

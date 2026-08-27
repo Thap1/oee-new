@@ -89,7 +89,7 @@ export interface ChartSliceSelectedEvent {
       } @else if (chartData()) {
         <div class="loss-pie-chart__canvas-wrap">
           <p-chart
-            type="pie"
+            type="doughnut"
             [data]="chartData()"
             [options]="chartOptions"
             (onDataSelect)="onSliceSelected($event)"
@@ -225,7 +225,7 @@ export class LossPieChart {
   /** A failed fetch (network blip, scope rejection, ...) — mirrors `DashboardPage`'s `loadError` pattern (Story 2.2) rather than leaving the widget silently stuck on stale data. */
   readonly error = this.errorSignal.asReadonly();
 
-  readonly chartOptions = { plugins: { legend: { position: 'bottom' } } };
+  readonly chartOptions = { cutout: '62%', plugins: { legend: { position: 'bottom' } } };
 
   constructor(
     private readonly lossAnalytics: LossAnalyticsService,

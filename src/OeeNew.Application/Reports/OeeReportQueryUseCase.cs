@@ -97,6 +97,58 @@ public sealed class OeeReportQueryUseCase(
             topReason?.Id, topReason?.Name, topReason?.Seconds);
     }
 
+    /// <summary>
+    /// One <see cref="OeeTrendPoint"/> per UTC calendar day over the <paramref name="days"/>-day window
+    /// ending on <paramref name="endDate"/> (inclusive) — the Dashboard's trend line. Deliberately not a
+    /// loop over <see cref="GetReportAsync"/>: one range query covers the whole window and each day is
+    /// derived by re-clipping the same slices, so a 30-day trend costs one DB round trip, not 30.
+    /// </summary>
+    public async Task<IReadOnlyList<OeeTrendPoint>> GetDailyTrendAsync(
+        CallerScope scope, DateOnly endDate, int days,
+        ReportFilterTargetType? filterType = null, Guid? filterId = null, CancellationToken cancellationToken = default)
+    {
+        var machineIds = await ResolveMachinesAsync(scope, ReportPeriodType.Day, null, cancellationToken);
+        if (filterType is { } type)
+        {
+            var filterSet = (await ResolveFilterMachinesAsync(scope, type, filterId!.Value, cancellationToken)).ToHashSet();
+            machineIds = machineIds.Where(filterSet.Contains).ToList();
+        }
+
+        var startDate = endDate.AddDays(-(days - 1));
+        var rangeStart = new DateTimeOffset(startDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var rangeEnd = rangeStart.AddDays(days);
+
+        var slices = machineIds.Count == 0
+            ? []
+            : await downtimeEvents.ListClosedSlicesInRangeAsync(machineIds, rangeStart, rangeEnd, cancellationToken);
+
+        var plannedSeconds = 86_400L * machineIds.Count;
+
+        var points = new List<OeeTrendPoint>(days);
+        for (var offset = 0; offset < days; offset++)
+        {
+            var dayStart = rangeStart.AddDays(offset);
+            var dayEnd = dayStart.AddDays(1);
+
+            var afterAvailability = plannedSeconds - SumFor(slices, LossCategory.AvailabilityLoss, dayStart, dayEnd);
+            var afterPerformance = afterAvailability - SumFor(slices, LossCategory.PerformanceLoss, dayStart, dayEnd);
+            var afterQuality = afterPerformance - SumFor(slices, LossCategory.QualityLoss, dayStart, dayEnd);
+
+            var availabilityPercent = RatioOrZero(afterAvailability, plannedSeconds);
+            var performancePercent = RatioOrZero(afterPerformance, afterAvailability);
+            var qualityPercent = RatioOrZero(afterQuality, afterPerformance);
+
+            points.Add(new OeeTrendPoint(
+                startDate.AddDays(offset),
+                availabilityPercent,
+                performancePercent,
+                qualityPercent,
+                availabilityPercent * performancePercent * qualityPercent));
+        }
+
+        return points;
+    }
+
     /// <summary>Fetches the picked <see cref="ShiftSchedule"/> and checks it against <see cref="CallerScope"/> — the single authorization point for a Shift-period request (see Code-review fix note on <see cref="GetReportAsync"/>).</summary>
     private async Task<ShiftSchedule> ResolveAuthorizedShiftAsync(CallerScope scope, Guid shiftScheduleId, CancellationToken cancellationToken)
     {

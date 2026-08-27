@@ -40,6 +40,45 @@
       "title": "Ghi nhận phế phẩm",
       "quantity": "Số lượng",
       "submit": "Lưu"
+    },
+    "range": {
+      "days": "{{days}} ngày"
+    },
+    "stat": {
+      "running": "Máy đang chạy",
+      "vsPreviousDay": "so với hôm trước",
+      "today": "hôm nay",
+      "fleet": "Máy trong phạm vi",
+      "runningStopped": "{{running}} đang chạy · {{stopped}} đang dừng",
+      "reportsRestricted": "Báo cáo OEE cần quyền Manager"
+    },
+    "trend": {
+      "title": "Xu hướng OEE",
+      "subtitle": "{{days}} ngày gần nhất, theo ngày lịch (UTC)",
+      "empty": "Chưa có dữ liệu xu hướng cho khoảng thời gian này.",
+      "series": {
+        "oee": "OEE",
+        "availability": "Availability",
+        "performance": "Performance",
+        "quality": "Quality"
+      }
+    },
+    "machineTable": {
+      "title": "Trạng thái máy",
+      "subtitle": "{{total}} máy trong phạm vi của bạn, cập nhật trực tiếp",
+      "machine": "Máy",
+      "status": "Trạng thái",
+      "counter": "Bộ đếm",
+      "lastReported": "Báo lần cuối",
+      "awaitingSignal": "Chờ tín hiệu",
+      "noMatch": "Không có máy nào khớp bộ lọc này.",
+      "filter": {
+        "all": "Tất cả",
+        "Running": "Đang chạy",
+        "Stopped": "Dừng",
+        "Idle": "Chờ",
+        "Fault": "Lỗi"
+      }
     }
   },
   "downtime": {
