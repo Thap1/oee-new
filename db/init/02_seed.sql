@@ -265,100 +265,89 @@ ON CONFLICT ("MachineId") DO UPDATE SET
     "LastReportedAt" = EXCLUDED."LastReportedAt";
 
 -- Downtime Events. Reason codes (when set) always come from the same Site as the Machine, matching
--- what the app itself enforces. The first block is one currently-open event per Site (EndedAt NULL,
--- pairs with that Site's Stopped Machine above); the rest is closed history spread over the last
--- ~5 days across every Machine.
+-- what the app itself enforces. This first block is one currently-open event per Site (EndedAt NULL,
+-- pairs with that Site's Stopped Machine above).
 INSERT INTO "DowntimeEvent" ("Id", "MachineId", "ReasonCodeId", "StartedAt", "EndedAt") VALUES
     ('00000000-0000-0000-0000-000000000701', '00000000-0000-0000-0000-000000000301', NULL, now() - interval '28 seconds', NULL),
     ('00000000-0000-0000-0000-000000000702', '00000000-0000-0000-0000-000000000307', '00000000-0000-0000-0000-000000000513', now() - interval '40 seconds', NULL),
     ('00000000-0000-0000-0000-000000000703', '00000000-0000-0000-0000-000000000313', NULL, now() - interval '10 seconds', NULL),
     ('00000000-0000-0000-0000-000000000704', '00000000-0000-0000-0000-000000000319', '00000000-0000-0000-0000-000000000524', now() - interval '40 seconds', NULL),
-    ('00000000-0000-0000-0000-000000000705', '00000000-0000-0000-0000-000000000325', NULL, now() - interval '43 seconds', NULL),
-    ('00000000-0000-0000-0000-000000000706', '00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-000000000506', now() - interval '3 days 21 hours 19 minutes', now() - interval '3 days 20 hours 28 minutes'),
-    ('00000000-0000-0000-0000-000000000707', '00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-000000000501', now() - interval '3 days 22 hours 14 minutes', now() - interval '3 days 21 hours 1 minutes'),
-    ('00000000-0000-0000-0000-000000000708', '00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-000000000505', now() - interval '4 days 17 hours 40 minutes', now() - interval '4 days 16 hours 29 minutes'),
-    ('00000000-0000-0000-0000-000000000709', '00000000-0000-0000-0000-000000000303', NULL, now() - interval '4 days 6 hours 16 minutes', now() - interval '4 days 5 hours 19 minutes'),
-    ('00000000-0000-0000-0000-000000000710', '00000000-0000-0000-0000-000000000304', '00000000-0000-0000-0000-000000000507', now() - interval '3 days 8 hours 49 minutes', now() - interval '3 days 8 hours 2 minutes'),
-    ('00000000-0000-0000-0000-000000000711', '00000000-0000-0000-0000-000000000304', '00000000-0000-0000-0000-000000000502', now() - interval '0 days 1 hours 43 minutes', now() - interval '0 days 1 hours 10 minutes'),
-    ('00000000-0000-0000-0000-000000000712', '00000000-0000-0000-0000-000000000305', '00000000-0000-0000-0000-000000000505', now() - interval '3 days 2 hours 9 minutes', now() - interval '3 days 1 hours 10 minutes'),
-    ('00000000-0000-0000-0000-000000000713', '00000000-0000-0000-0000-000000000306', '00000000-0000-0000-0000-000000000505', now() - interval '1 days 14 hours 47 minutes', now() - interval '1 days 13 hours 56 minutes'),
-    ('00000000-0000-0000-0000-000000000714', '00000000-0000-0000-0000-000000000307', '00000000-0000-0000-0000-000000000510', now() - interval '2 days 3 hours 35 minutes', now() - interval '2 days 3 hours 19 minutes'),
-    ('00000000-0000-0000-0000-000000000715', '00000000-0000-0000-0000-000000000307', '00000000-0000-0000-0000-000000000513', now() - interval '0 days 1 hours 28 minutes', now() - interval '0 days 0 hours 29 minutes'),
-    ('00000000-0000-0000-0000-000000000716', '00000000-0000-0000-0000-000000000308', '00000000-0000-0000-0000-000000000514', now() - interval '4 days 3 hours 58 minutes', now() - interval '4 days 3 hours 1 minutes'),
-    ('00000000-0000-0000-0000-000000000717', '00000000-0000-0000-0000-000000000309', '00000000-0000-0000-0000-000000000508', now() - interval '3 days 22 hours 47 minutes', now() - interval '3 days 21 hours 45 minutes'),
-    ('00000000-0000-0000-0000-000000000718', '00000000-0000-0000-0000-000000000310', '00000000-0000-0000-0000-000000000511', now() - interval '2 days 8 hours 56 minutes', now() - interval '2 days 8 hours 27 minutes'),
-    ('00000000-0000-0000-0000-000000000719', '00000000-0000-0000-0000-000000000311', '00000000-0000-0000-0000-000000000510', now() - interval '1 days 18 hours 44 minutes', now() - interval '1 days 18 hours 15 minutes'),
-    ('00000000-0000-0000-0000-000000000720', '00000000-0000-0000-0000-000000000312', '00000000-0000-0000-0000-000000000508', now() - interval '3 days 22 hours 40 minutes', now() - interval '3 days 22 hours 11 minutes'),
-    ('00000000-0000-0000-0000-000000000721', '00000000-0000-0000-0000-000000000313', '00000000-0000-0000-0000-000000000519', now() - interval '2 days 21 hours 47 minutes', now() - interval '2 days 20 hours 54 minutes'),
-    ('00000000-0000-0000-0000-000000000722', '00000000-0000-0000-0000-000000000313', NULL, now() - interval '0 days 14 hours 54 minutes', now() - interval '0 days 14 hours 27 minutes'),
-    ('00000000-0000-0000-0000-000000000723', '00000000-0000-0000-0000-000000000314', '00000000-0000-0000-0000-000000000515', now() - interval '4 days 19 hours 26 minutes', now() - interval '4 days 18 hours 42 minutes'),
-    ('00000000-0000-0000-0000-000000000724', '00000000-0000-0000-0000-000000000314', NULL, now() - interval '0 days 16 hours 10 minutes', now() - interval '0 days 15 hours 4 minutes'),
-    ('00000000-0000-0000-0000-000000000725', '00000000-0000-0000-0000-000000000315', '00000000-0000-0000-0000-000000000520', now() - interval '0 days 11 hours 58 minutes', now() - interval '0 days 10 hours 52 minutes'),
-    ('00000000-0000-0000-0000-000000000726', '00000000-0000-0000-0000-000000000315', '00000000-0000-0000-0000-000000000520', now() - interval '0 days 1 hours 42 minutes', now() - interval '0 days 0 hours 55 minutes'),
-    ('00000000-0000-0000-0000-000000000727', '00000000-0000-0000-0000-000000000316', '00000000-0000-0000-0000-000000000515', now() - interval '2 days 7 hours 32 minutes', now() - interval '2 days 6 hours 48 minutes'),
-    ('00000000-0000-0000-0000-000000000728', '00000000-0000-0000-0000-000000000316', '00000000-0000-0000-0000-000000000517', now() - interval '2 days 19 hours 10 minutes', now() - interval '2 days 18 hours 6 minutes'),
-    ('00000000-0000-0000-0000-000000000729', '00000000-0000-0000-0000-000000000317', '00000000-0000-0000-0000-000000000516', now() - interval '1 days 13 hours 50 minutes', now() - interval '1 days 12 hours 51 minutes'),
-    ('00000000-0000-0000-0000-000000000730', '00000000-0000-0000-0000-000000000318', NULL, now() - interval '4 days 15 hours 35 minutes', now() - interval '4 days 14 hours 49 minutes'),
-    ('00000000-0000-0000-0000-000000000731', '00000000-0000-0000-0000-000000000319', '00000000-0000-0000-0000-000000000522', now() - interval '2 days 23 hours 39 minutes', now() - interval '2 days 22 hours 30 minutes'),
-    ('00000000-0000-0000-0000-000000000732', '00000000-0000-0000-0000-000000000319', '00000000-0000-0000-0000-000000000524', now() - interval '0 days 19 hours 52 minutes', now() - interval '0 days 19 hours 13 minutes'),
-    ('00000000-0000-0000-0000-000000000733', '00000000-0000-0000-0000-000000000320', NULL, now() - interval '1 days 18 hours 42 minutes', now() - interval '1 days 17 hours 35 minutes'),
-    ('00000000-0000-0000-0000-000000000734', '00000000-0000-0000-0000-000000000321', '00000000-0000-0000-0000-000000000526', now() - interval '2 days 18 hours 49 minutes', now() - interval '2 days 18 hours 23 minutes'),
-    ('00000000-0000-0000-0000-000000000735', '00000000-0000-0000-0000-000000000321', '00000000-0000-0000-0000-000000000525', now() - interval '1 days 22 hours 6 minutes', now() - interval '1 days 21 hours 43 minutes'),
-    ('00000000-0000-0000-0000-000000000736', '00000000-0000-0000-0000-000000000322', '00000000-0000-0000-0000-000000000522', now() - interval '1 days 19 hours 43 minutes', now() - interval '1 days 18 hours 53 minutes'),
-    ('00000000-0000-0000-0000-000000000737', '00000000-0000-0000-0000-000000000323', '00000000-0000-0000-0000-000000000523', now() - interval '0 days 13 hours 22 minutes', now() - interval '0 days 13 hours 1 minutes'),
-    ('00000000-0000-0000-0000-000000000738', '00000000-0000-0000-0000-000000000324', '00000000-0000-0000-0000-000000000527', now() - interval '4 days 4 hours 36 minutes', now() - interval '4 days 4 hours 15 minutes'),
-    ('00000000-0000-0000-0000-000000000739', '00000000-0000-0000-0000-000000000324', '00000000-0000-0000-0000-000000000522', now() - interval '4 days 18 hours 16 minutes', now() - interval '4 days 17 hours 49 minutes'),
-    ('00000000-0000-0000-0000-000000000740', '00000000-0000-0000-0000-000000000325', '00000000-0000-0000-0000-000000000535', now() - interval '4 days 21 hours 6 minutes', now() - interval '4 days 20 hours 36 minutes'),
-    ('00000000-0000-0000-0000-000000000741', '00000000-0000-0000-0000-000000000326', '00000000-0000-0000-0000-000000000535', now() - interval '3 days 4 hours 43 minutes', now() - interval '3 days 4 hours 14 minutes'),
-    ('00000000-0000-0000-0000-000000000742', '00000000-0000-0000-0000-000000000326', '00000000-0000-0000-0000-000000000535', now() - interval '2 days 18 hours 32 minutes', now() - interval '2 days 18 hours 15 minutes'),
-    ('00000000-0000-0000-0000-000000000743', '00000000-0000-0000-0000-000000000327', NULL, now() - interval '2 days 21 hours 20 minutes', now() - interval '2 days 20 hours 22 minutes'),
-    ('00000000-0000-0000-0000-000000000744', '00000000-0000-0000-0000-000000000327', '00000000-0000-0000-0000-000000000531', now() - interval '0 days 15 hours 59 minutes', now() - interval '0 days 15 hours 34 minutes'),
-    ('00000000-0000-0000-0000-000000000745', '00000000-0000-0000-0000-000000000328', '00000000-0000-0000-0000-000000000531', now() - interval '1 days 4 hours 12 minutes', now() - interval '1 days 3 hours 24 minutes'),
-    ('00000000-0000-0000-0000-000000000746', '00000000-0000-0000-0000-000000000329', '00000000-0000-0000-0000-000000000533', now() - interval '2 days 9 hours 13 minutes', now() - interval '2 days 8 hours 39 minutes'),
-    ('00000000-0000-0000-0000-000000000747', '00000000-0000-0000-0000-000000000330', '00000000-0000-0000-0000-000000000534', now() - interval '0 days 1 hours 14 minutes', now() - interval '0 days 0 hours 48 minutes')
+    ('00000000-0000-0000-0000-000000000705', '00000000-0000-0000-0000-000000000325', NULL, now() - interval '43 seconds', NULL)
 ON CONFLICT ("Id") DO NOTHING;
 
--- Quality Rejects, scattered across every Machine over the last few days.
-INSERT INTO "QualityReject" ("Id", "MachineId", "Quantity", "RecordedAt") VALUES
-    ('00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000301', 12, now() - interval '2 days 20 hours'),
-    ('00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000301', 2, now() - interval '4 days 22 hours'),
-    ('00000000-0000-0000-0000-000000000803', '00000000-0000-0000-0000-000000000302', 9, now() - interval '4 days 3 hours'),
-    ('00000000-0000-0000-0000-000000000804', '00000000-0000-0000-0000-000000000303', 8, now() - interval '3 days 23 hours'),
-    ('00000000-0000-0000-0000-000000000805', '00000000-0000-0000-0000-000000000303', 11, now() - interval '3 days 5 hours'),
-    ('00000000-0000-0000-0000-000000000806', '00000000-0000-0000-0000-000000000304', 12, now() - interval '1 days 15 hours'),
-    ('00000000-0000-0000-0000-000000000807', '00000000-0000-0000-0000-000000000304', 11, now() - interval '0 days 7 hours'),
-    ('00000000-0000-0000-0000-000000000808', '00000000-0000-0000-0000-000000000305', 4, now() - interval '3 days 13 hours'),
-    ('00000000-0000-0000-0000-000000000809', '00000000-0000-0000-0000-000000000305', 11, now() - interval '0 days 8 hours'),
-    ('00000000-0000-0000-0000-000000000810', '00000000-0000-0000-0000-000000000306', 10, now() - interval '3 days 7 hours'),
-    ('00000000-0000-0000-0000-000000000811', '00000000-0000-0000-0000-000000000307', 1, now() - interval '4 days 13 hours'),
-    ('00000000-0000-0000-0000-000000000812', '00000000-0000-0000-0000-000000000308', 3, now() - interval '4 days 23 hours'),
-    ('00000000-0000-0000-0000-000000000813', '00000000-0000-0000-0000-000000000309', 8, now() - interval '1 days 8 hours'),
-    ('00000000-0000-0000-0000-000000000814', '00000000-0000-0000-0000-000000000310', 6, now() - interval '1 days 6 hours'),
-    ('00000000-0000-0000-0000-000000000815', '00000000-0000-0000-0000-000000000311', 9, now() - interval '1 days 21 hours'),
-    ('00000000-0000-0000-0000-000000000816', '00000000-0000-0000-0000-000000000311', 7, now() - interval '3 days 1 hours'),
-    ('00000000-0000-0000-0000-000000000817', '00000000-0000-0000-0000-000000000312', 4, now() - interval '3 days 9 hours'),
-    ('00000000-0000-0000-0000-000000000818', '00000000-0000-0000-0000-000000000313', 6, now() - interval '0 days 13 hours'),
-    ('00000000-0000-0000-0000-000000000819', '00000000-0000-0000-0000-000000000314', 8, now() - interval '0 days 4 hours'),
-    ('00000000-0000-0000-0000-000000000820', '00000000-0000-0000-0000-000000000315', 2, now() - interval '4 days 8 hours'),
-    ('00000000-0000-0000-0000-000000000821', '00000000-0000-0000-0000-000000000316', 10, now() - interval '2 days 3 hours'),
-    ('00000000-0000-0000-0000-000000000822', '00000000-0000-0000-0000-000000000317', 1, now() - interval '2 days 18 hours'),
-    ('00000000-0000-0000-0000-000000000823', '00000000-0000-0000-0000-000000000318', 10, now() - interval '1 days 15 hours'),
-    ('00000000-0000-0000-0000-000000000824', '00000000-0000-0000-0000-000000000319', 10, now() - interval '0 days 10 hours'),
-    ('00000000-0000-0000-0000-000000000825', '00000000-0000-0000-0000-000000000320', 9, now() - interval '4 days 1 hours'),
-    ('00000000-0000-0000-0000-000000000826', '00000000-0000-0000-0000-000000000321', 8, now() - interval '4 days 12 hours'),
-    ('00000000-0000-0000-0000-000000000827', '00000000-0000-0000-0000-000000000322', 11, now() - interval '4 days 7 hours'),
-    ('00000000-0000-0000-0000-000000000828', '00000000-0000-0000-0000-000000000323', 9, now() - interval '3 days 23 hours'),
-    ('00000000-0000-0000-0000-000000000829', '00000000-0000-0000-0000-000000000323', 6, now() - interval '4 days 4 hours'),
-    ('00000000-0000-0000-0000-000000000830', '00000000-0000-0000-0000-000000000324', 4, now() - interval '0 days 19 hours'),
-    ('00000000-0000-0000-0000-000000000831', '00000000-0000-0000-0000-000000000325', 2, now() - interval '0 days 3 hours'),
-    ('00000000-0000-0000-0000-000000000832', '00000000-0000-0000-0000-000000000325', 7, now() - interval '2 days 21 hours'),
-    ('00000000-0000-0000-0000-000000000833', '00000000-0000-0000-0000-000000000326', 1, now() - interval '2 days 12 hours'),
-    ('00000000-0000-0000-0000-000000000834', '00000000-0000-0000-0000-000000000327', 7, now() - interval '4 days 4 hours'),
-    ('00000000-0000-0000-0000-000000000835', '00000000-0000-0000-0000-000000000327', 5, now() - interval '2 days 16 hours'),
-    ('00000000-0000-0000-0000-000000000836', '00000000-0000-0000-0000-000000000328', 2, now() - interval '2 days 0 hours'),
-    ('00000000-0000-0000-0000-000000000837', '00000000-0000-0000-0000-000000000329', 10, now() - interval '3 days 15 hours'),
-    ('00000000-0000-0000-0000-000000000838', '00000000-0000-0000-0000-000000000330', 1, now() - interval '2 days 20 hours')
+-- Closed downtime history — generated rather than hand-listed, because the report math needs volume
+-- to mean anything. OEE here reduces to `1 - totalLoss / plannedTime` (see OeeReportQueryUseCase),
+-- and plannedTime is the FULL calendar day per machine — there is no operating-calendar entity to
+-- subtract nights or weekends. A hand-written handful of 40-minute stoppages is therefore <1% of
+-- 30 machines x 24h, which lands OEE at 99%+ and draws a dead-flat trend line. Three events per
+-- machine-day averaging 5.6h in total put OEE around 77% with visible day-to-day movement.
+--
+-- Ids are md5-derived from (machine, day, category) so re-running stays idempotent under
+-- ON CONFLICT, exactly like the fixed-id rows above. Each machine-day gets one event per
+-- LossCategory in a non-overlapping time window — two overlapping closed events on one machine
+-- would double-count that machine's loss — with base durations weighted 3.0h / 1.7h / 0.9h so the
+-- Loss Breakdown doughnut has a realistic Availability-dominant shape.
+--
+-- `('x' || substr(md5(...), 1, 7))::bit(28)::int` is the deterministic-pseudo-random idiom: 28 bits
+-- keeps it inside a non-negative int, so `% n` never yields a negative offset.
+INSERT INTO "DowntimeEvent" ("Id", "MachineId", "ReasonCodeId", "StartedAt", "EndedAt")
+SELECT
+    md5('downtime|' || m."Id"::text || '|' || d::text || '|' || slot.category::text)::uuid,
+    m."Id",
+    rc."Id",
+    slot.started_at,
+    -- Clamped so "today" never contains a closed event that ends in the future.
+    least(slot.started_at + make_interval(mins => slot.duration_minutes), now() - interval '2 minutes')
+FROM "Machine" m
+JOIN "Line" l ON l."Id" = m."LineId"
+CROSS JOIN generate_series(0, 29) AS d
+-- (LossCategory, window start minute-of-day, base duration minutes, window span minutes)
+CROSS JOIN (VALUES (0, 0, 180, 180), (1, 540, 102, 120), (2, 900, 54, 120))
+    AS cat(category, window_start_minute, base_duration_minutes, window_span_minutes)
+CROSS JOIN LATERAL (
+    SELECT
+        cat.category,
+        date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+            - make_interval(days => d)
+            + make_interval(mins => cat.window_start_minute
+                + (('x' || substr(md5('start|' || m."Id"::text || d::text || cat.category::text), 1, 7))::bit(28)::int
+                   % cat.window_span_minutes)) AS started_at,
+        -- 0.60x..1.40x per machine, times a 0.70x..1.30x factor shared by every machine on that day,
+        -- so the trend line moves as one plant rather than as 30 independent random walks.
+        greatest(10, (cat.base_duration_minutes
+            * (60 + (('x' || substr(md5('dur|' || m."Id"::text || d::text || cat.category::text), 1, 7))::bit(28)::int % 81))
+            * (70 + (('x' || substr(md5('day|' || d::text), 1, 7))::bit(28)::int % 61))
+            / 10000)::int) AS duration_minutes
+) AS slot
+-- A Site missing an active ReasonCode for this category simply yields NULL here, which is a valid
+-- unattributed stoppage (it shows in the report's "unattributed" figure), not a broken row.
+LEFT JOIN LATERAL (
+    SELECT r."Id"
+    FROM "ReasonCode" r
+    WHERE r."SiteId" = l."SiteId" AND r."LossCategory" = slot.category AND r."IsActive"
+    ORDER BY md5('reason|' || r."Id"::text || m."Id"::text || d::text)
+    LIMIT 1
+) rc ON true
+WHERE slot.started_at < now() - interval '10 minutes'
+ON CONFLICT ("Id") DO NOTHING;
+
+-- Quality Rejects — one per machine per day over the same 30-day window, so the Dashboard's
+-- "Quality rejects" tile and the Loss Breakdown caption both have something to show on any date.
+INSERT INTO "QualityReject" ("Id", "MachineId", "Quantity", "RecordedAt")
+SELECT
+    md5('reject|' || m."Id"::text || '|' || d::text)::uuid,
+    m."Id",
+    1 + (('x' || substr(md5('qty|' || m."Id"::text || d::text), 1, 7))::bit(28)::int % 14),
+    r.recorded_at
+FROM "Machine" m
+CROSS JOIN generate_series(0, 29) AS d
+CROSS JOIN LATERAL (
+    SELECT date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+        - make_interval(days => d)
+        + make_interval(mins => 360
+            + (('x' || substr(md5('at|' || m."Id"::text || d::text), 1, 7))::bit(28)::int % 720)) AS recorded_at
+) AS r
+WHERE r.recorded_at < now()
 ON CONFLICT ("Id") DO NOTHING;
 
 COMMIT;
-
