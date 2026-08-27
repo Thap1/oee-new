@@ -19,6 +19,9 @@ export class MachineStatusHubService {
   private connection: signalR.HubConnection | null = null;
 
   readonly lastEvent = signal<MachineStatusChangedEvent | null>(null);
+  /** One grouped update for many machines at once (e.g. the demo simulator's tick) — consumers apply
+   * the whole batch in a single state update instead of one per machine (see dashboard-page.ts). */
+  readonly lastBatch = signal<MachineStatusChangedEvent[] | null>(null);
 
   constructor(private readonly authService: AuthService) {}
 
@@ -34,6 +37,10 @@ export class MachineStatusHubService {
 
     this.connection.on('MachineStatusChanged', (event: MachineStatusChangedEvent) => {
       this.lastEvent.set(event);
+    });
+
+    this.connection.on('MachineStatusesChanged', (events: MachineStatusChangedEvent[]) => {
+      this.lastBatch.set(events);
     });
 
     void this.connection.start();

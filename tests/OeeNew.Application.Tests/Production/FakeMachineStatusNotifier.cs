@@ -14,6 +14,16 @@ internal sealed class FakeMachineStatusNotifier : IMachineStatusNotifier
         return Task.CompletedTask;
     }
 
+    public Task NotifyMachineStatusesChangedAsync(IReadOnlyList<MachineStatusChange> changes, CancellationToken cancellationToken = default)
+    {
+        foreach (var change in changes)
+        {
+            Calls.Add((change.MachineId, change.Status, change.Counter, change.ReportedAt));
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task NotifyDowntimeReasonRecordedAsync(Guid machineId, Guid reasonCodeId, CancellationToken cancellationToken = default)
     {
         DowntimeReasonCalls.Add((machineId, reasonCodeId));

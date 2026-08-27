@@ -188,6 +188,12 @@ export class DashboardPage implements OnInit, OnDestroy {
         this.applyEvent(event);
       }
     });
+    effect(() => {
+      const batch = this.hub.lastBatch();
+      if (batch) {
+        this.applyBatch(batch);
+      }
+    });
   }
 
   async ngOnInit(): Promise<void> {
@@ -256,31 +262,49 @@ export class DashboardPage implements OnInit, OnDestroy {
   }
 
   private applyEvent(event: MachineStatusChangedEvent): void {
+    this.applyBatch([event]);
+  }
+
+  /** Applies every event in one array copy + one signal write, regardless of batch size — a tick
+   * that changes the whole fleet still costs one re-render, not one per machine. */
+  private applyBatch(events: MachineStatusChangedEvent[]): void {
+    const byMachineId = new Map(events.map((e) => [e.machineId, e]));
     const current = this.machinesSignal();
-    const index = current.findIndex((m) => m.machineId === event.machineId);
-    if (index === -1) {
+    let changed = false;
+    const updated = current.map((machine) => {
+      const event = byMachineId.get(machine.machineId);
+      if (!event) {
+        return machine;
+      }
+      changed = true;
+      return {
+        ...machine,
+        status: event.status as MachineStatusDto['status'],
+        counter: event.counter,
+        lastReportedAt: event.lastReportedAt,
+      };
+    });
+
+    if (!changed) {
       return;
     }
 
-    const updated = [...current];
-    updated[index] = {
-      ...updated[index],
-      status: event.status as MachineStatusDto['status'],
-      counter: event.counter,
-      lastReportedAt: event.lastReportedAt,
-    };
     this.machinesSignal.set(updated);
-    this.markRecentlyUpdated(event.machineId);
+    this.markRecentlyUpdated(updated.filter((m) => byMachineId.has(m.machineId)).map((m) => m.machineId));
   }
 
-  private markRecentlyUpdated(machineId: string): void {
+  private markRecentlyUpdated(machineIds: string[]): void {
     const ids = new Set(this.recentlyUpdatedSignal());
-    ids.add(machineId);
+    for (const machineId of machineIds) {
+      ids.add(machineId);
+    }
     this.recentlyUpdatedSignal.set(ids);
 
     setTimeout(() => {
       const cleared = new Set(this.recentlyUpdatedSignal());
-      cleared.delete(machineId);
+      for (const machineId of machineIds) {
+        cleared.delete(machineId);
+      }
       this.recentlyUpdatedSignal.set(cleared);
     }, PULSE_DURATION_MS);
   }

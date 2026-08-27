@@ -13,6 +13,12 @@ public sealed class SignalRMachineStatusNotifier(IHubContext<MachineStatusHub> h
             new { machineId, status, counter, lastReportedAt = reportedAt },
             cancellationToken);
 
+    public Task NotifyMachineStatusesChangedAsync(IReadOnlyList<MachineStatusChange> changes, CancellationToken cancellationToken = default) =>
+        hubContext.Clients.All.SendAsync(
+            "MachineStatusesChanged",
+            changes.Select(c => new { machineId = c.MachineId, status = c.Status, counter = c.Counter, lastReportedAt = c.ReportedAt }).ToList(),
+            cancellationToken);
+
     public Task NotifyDowntimeReasonRecordedAsync(Guid machineId, Guid reasonCodeId, CancellationToken cancellationToken = default) =>
         hubContext.Clients.All.SendAsync(
             "DowntimeReasonRecorded",

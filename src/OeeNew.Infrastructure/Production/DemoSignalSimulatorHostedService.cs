@@ -53,6 +53,7 @@ public sealed class DemoSignalSimulatorHostedService(
         using var scope = scopeFactory.CreateScope();
         var machines = scope.ServiceProvider.GetRequiredService<IMachineRepository>();
         var machineStates = scope.ServiceProvider.GetRequiredService<IMachineStateRepository>();
+        var realNotifier = scope.ServiceProvider.GetRequiredService<IMachineStatusNotifier>();
 
         var allMachines = await machines.ListByScopeAsync(CallerScope.Global, cancellationToken);
         var machineIds = allMachines.Select(m => m.Id).ToList();
@@ -63,6 +64,13 @@ public sealed class DemoSignalSimulatorHostedService(
         var now = DateTimeOffset.UtcNow;
         var randomizeStatus = options.Value.RandomizeStatus;
 
+        // Every machine in the fleet reports within the same tick, so broadcasting per machine (as
+        // IngestProductionReadingUseCase normally does for a real, one-at-a-time reading) turned into
+        // one SignalR message per machine per tick — enough to overwhelm the dashboard client's
+        // change detection. Route the simulator's calls through a buffering notifier instead and
+        // flush once, so clients see one grouped update per tick regardless of fleet size.
+        var batchNotifier = new BufferingMachineStatusNotifier(realNotifier);
+
         using var throttle = new SemaphoreSlim(MaxConcurrentIngests);
         var ingestTasks = states.Select(async state =>
         {
@@ -72,7 +80,12 @@ public sealed class DemoSignalSimulatorHostedService(
                 // Each concurrent ingest needs its own DbContext (not thread-safe to share one across
                 // parallel tasks), so a fresh scope per machine instead of the tick-wide scope above.
                 using var machineScope = scopeFactory.CreateScope();
-                var ingest = machineScope.ServiceProvider.GetRequiredService<IngestProductionReadingUseCase>();
+                var ingest = new IngestProductionReadingUseCase(
+                    machineScope.ServiceProvider.GetRequiredService<IMachineRepository>(),
+                    machineScope.ServiceProvider.GetRequiredService<ILineRepository>(),
+                    machineScope.ServiceProvider.GetRequiredService<IMachineStateRepository>(),
+                    machineScope.ServiceProvider.GetRequiredService<IDowntimeEventRepository>(),
+                    batchNotifier);
                 var status = randomizeStatus ? AllStatuses[Random.Shared.Next(AllStatuses.Length)] : state.Status;
                 var reading = new SimulatedReading(state.MachineId, now, state.Counter + 1, status);
                 await ingest.IngestAsync(CallerScope.Global, "Admin", reading, cancellationToken);
@@ -84,6 +97,7 @@ public sealed class DemoSignalSimulatorHostedService(
         });
 
         await Task.WhenAll(ingestTasks);
+        await batchNotifier.FlushAsync(cancellationToken);
     }
 
     private sealed record SimulatedReading(Guid MachineId, DateTimeOffset Timestamp, long Counter, MachineStatus Status)
