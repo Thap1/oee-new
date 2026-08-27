@@ -29,6 +29,12 @@ public sealed class DemoSignalSimulatorHostedService(
 {
     private static readonly MachineStatus[] AllStatuses = Enum.GetValues<MachineStatus>();
 
+    // Ingesting one machine at a time, strictly sequentially, made a tick's wall-clock cost scale
+    // linearly with fleet size (each machine paying its own DB round trips + a SignalR broadcast before
+    // the next could start) and was observed to stall the app under a real fleet. Bounded concurrency
+    // keeps the win without opening one connection per machine at once.
+    private const int MaxConcurrentIngests = 8;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var interval = options.Value.RandomizeStatus
@@ -47,7 +53,6 @@ public sealed class DemoSignalSimulatorHostedService(
         using var scope = scopeFactory.CreateScope();
         var machines = scope.ServiceProvider.GetRequiredService<IMachineRepository>();
         var machineStates = scope.ServiceProvider.GetRequiredService<IMachineStateRepository>();
-        var ingest = scope.ServiceProvider.GetRequiredService<IngestProductionReadingUseCase>();
 
         var allMachines = await machines.ListByScopeAsync(CallerScope.Global, cancellationToken);
         var machineIds = allMachines.Select(m => m.Id).ToList();
@@ -57,12 +62,28 @@ public sealed class DemoSignalSimulatorHostedService(
 
         var now = DateTimeOffset.UtcNow;
         var randomizeStatus = options.Value.RandomizeStatus;
-        foreach (var state in states)
+
+        using var throttle = new SemaphoreSlim(MaxConcurrentIngests);
+        var ingestTasks = states.Select(async state =>
         {
-            var status = randomizeStatus ? AllStatuses[Random.Shared.Next(AllStatuses.Length)] : state.Status;
-            var reading = new SimulatedReading(state.MachineId, now, state.Counter + 1, status);
-            await ingest.IngestAsync(CallerScope.Global, "Admin", reading, cancellationToken);
-        }
+            await throttle.WaitAsync(cancellationToken);
+            try
+            {
+                // Each concurrent ingest needs its own DbContext (not thread-safe to share one across
+                // parallel tasks), so a fresh scope per machine instead of the tick-wide scope above.
+                using var machineScope = scopeFactory.CreateScope();
+                var ingest = machineScope.ServiceProvider.GetRequiredService<IngestProductionReadingUseCase>();
+                var status = randomizeStatus ? AllStatuses[Random.Shared.Next(AllStatuses.Length)] : state.Status;
+                var reading = new SimulatedReading(state.MachineId, now, state.Counter + 1, status);
+                await ingest.IngestAsync(CallerScope.Global, "Admin", reading, cancellationToken);
+            }
+            finally
+            {
+                throttle.Release();
+            }
+        });
+
+        await Task.WhenAll(ingestTasks);
     }
 
     private sealed record SimulatedReading(Guid MachineId, DateTimeOffset Timestamp, long Counter, MachineStatus Status)

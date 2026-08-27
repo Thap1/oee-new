@@ -14,14 +14,20 @@ public sealed class MachineStateRepository(OeeDbContext context) : IMachineState
 
     public async Task UpsertAsync(MachineState state, CancellationToken cancellationToken = default)
     {
-        var tracked = await context.MachineStates.FirstOrDefaultAsync(s => s.MachineId == state.MachineId, cancellationToken);
-        if (tracked is null)
+        // Callers that already hold a tracked instance (e.g. loaded via GetAsync earlier in the same
+        // scope, then mutated) need no lookup here — EF's change tracker already has the pending update.
+        // Re-querying it was a redundant round trip on the hot ingest path.
+        if (context.Entry(state).State == EntityState.Detached)
         {
-            context.MachineStates.Add(state);
-        }
-        else if (!ReferenceEquals(tracked, state))
-        {
-            context.Entry(tracked).CurrentValues.SetValues(state);
+            var tracked = await context.MachineStates.FindAsync([state.MachineId], cancellationToken);
+            if (tracked is null)
+            {
+                context.MachineStates.Add(state);
+            }
+            else
+            {
+                context.Entry(tracked).CurrentValues.SetValues(state);
+            }
         }
 
         await context.SaveChangesAsync(cancellationToken);
