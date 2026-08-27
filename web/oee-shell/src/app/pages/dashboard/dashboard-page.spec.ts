@@ -71,6 +71,23 @@ describe('DashboardPage', () => {
     await flushMicrotasks();
     fixture.detectChanges();
 
+    // A non-empty machine list flows into <app-loss-pie-chart>'s [equipmentOptions] binding, which
+    // auto-selects the first Equipment and fires its own fetch (see LossPieChart.ngOnChanges) —
+    // every test with machines must drain this request or httpMock.verify() fails in afterEach.
+    if (machines.length > 0) {
+      httpMock.expectOne((r) => r.url.startsWith('/api/analytics/loss-breakdown')).flush({
+        targetId: (machines[0] as { machineId: string }).machineId,
+        targetType: 'Equipment',
+        availabilitySeconds: 0,
+        performanceSeconds: 0,
+        qualitySeconds: 0,
+        unattributedSeconds: 0,
+        qualityRejectQuantity: 0,
+      });
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
     return fixture;
   }
 

@@ -1,4 +1,4 @@
-import { Component, Input, computed, signal } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { DatePicker } from 'primeng/datepicker';
@@ -205,7 +205,7 @@ export interface ChartSliceSelectedEvent {
     `,
   ],
 })
-export class LossPieChart {
+export class LossPieChart implements OnChanges {
   @Input({ required: true }) equipmentOptions: EquipmentOption[] = [];
 
   private readonly targetTypeSignal = signal<LossBreakdownTargetType>('Equipment');
@@ -231,6 +231,24 @@ export class LossPieChart {
     private readonly lossAnalytics: LossAnalyticsService,
     private readonly translate: TranslateService,
   ) {}
+
+  /**
+   * Auto-selects the first Equipment once the Dashboard's scoped machine list arrives, so this panel
+   * shows a chart immediately like the rest of the redesigned Dashboard (KPI cards/trend chart) instead
+   * of sitting empty until the caller manually picks a target from `targetOptions()` (Story 3.1's
+   * original all-manual behavior). Only fires while still on the Equipment tab with nothing picked yet —
+   * never overrides a caller's own selection, including one made before options finished loading.
+   */
+  ngOnChanges(changes: SimpleChanges): void {
+    if (
+      changes['equipmentOptions'] &&
+      this.equipmentOptions.length > 0 &&
+      this.targetTypeSignal() === 'Equipment' &&
+      this.selectedTargetIdSignal() === null
+    ) {
+      void this.onTargetChange(this.equipmentOptions[0].machineId);
+    }
+  }
 
   targetTypeOptions() {
     return [

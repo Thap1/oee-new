@@ -1,10 +1,15 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { SimpleChange } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideTranslateLoader, provideTranslateService } from '@ngx-translate/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { HttpTranslateLoader } from '../../core/i18n/http-translate-loader';
 import { EquipmentOption, LossPieChart } from './loss-pie-chart';
+
+function flushMicrotasks(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 const I18N_VI = {
   lossChart: {
@@ -69,9 +74,32 @@ describe('LossPieChart', () => {
     return fixture;
   }
 
-  it('does not fetch anything until the user picks a target (no auto-select)', () => {
-    create();
-    // afterEach's httpMock.verify() itself proves no unexpected request was made on load.
+  it('auto-selects the first Equipment once options arrive, so the panel is never empty by default', async () => {
+    const fixture = create();
+
+    // The redesigned Dashboard's KPI cards/trend chart load automatically — leaving this panel to sit
+    // empty until a manual pick made it look broken by comparison, not merely unconfigured. In real
+    // usage `ngOnChanges` fires via the `[equipmentOptions]` template binding (`DashboardPage`); a unit
+    // test that sets the input via direct property assignment has to invoke it explicitly to match.
+    fixture.componentInstance.ngOnChanges({ equipmentOptions: {} as SimpleChange });
+    httpMock.expectOne('/api/analytics/loss-breakdown?targetType=Equipment&targetId=m1').flush(breakdown({ availabilitySeconds: 100 }));
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.selectedTargetId()).toBe('m1');
+    expect(fixture.componentInstance.chartData()).not.toBeNull();
+  });
+
+  it('does not re-fetch or override an already-picked target when equipmentOptions changes again', async () => {
+    const fixture = create();
+    const selectPromise = fixture.componentInstance.onTargetChange('m1');
+    httpMock.expectOne('/api/analytics/loss-breakdown?targetType=Equipment&targetId=m1').flush(breakdown({ availabilitySeconds: 100 }));
+    await selectPromise;
+
+    fixture.componentInstance.ngOnChanges({ equipmentOptions: {} as SimpleChange });
+    // afterEach's httpMock.verify() proves no second request was made — the existing selection stands.
+
+    expect(fixture.componentInstance.selectedTargetId()).toBe('m1');
   });
 
   it('selecting an Equipment target fetches its breakdown and populates the chart data', async () => {
