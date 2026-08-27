@@ -1,6 +1,7 @@
 import { Component, OnDestroy, OnInit, computed, effect, signal, untracked } from '@angular/core';
 import { TranslatePipe } from '@ngx-translate/core';
 import { AppModeService } from '../../core/app-mode/app-mode.service';
+import { RunawayGuard } from '../../core/diagnostics/runaway-guard';
 import { MachineStatusChangedEvent, MachineStatusHubService } from '../../core/realtime/machine-status-hub.service';
 import { SyncStatusPanel } from '../../shared/sync-status/sync-status-panel';
 import { MasterDataService, ReasonCodeDto } from '../master-data/master-data.service';
@@ -162,6 +163,7 @@ export class DashboardPage implements OnInit, OnDestroy {
   private readonly pickerOpenSignal = signal(false);
   private readonly pickerReasonCodesSignal = signal<ReasonCodeDto[]>([]);
   private pickerMachineId: string | null = null;
+  private readonly runawayGuard = new RunawayGuard('DashboardPage.applyBatch');
 
   readonly machines = this.machinesSignal.asReadonly();
   readonly recentlyUpdated = this.recentlyUpdatedSignal.asReadonly();
@@ -273,6 +275,12 @@ export class DashboardPage implements OnInit, OnDestroy {
   /** Applies every event in one array copy + one signal write, regardless of batch size — a tick
    * that changes the whole fleet still costs one re-render, not one per machine. */
   private applyBatch(events: MachineStatusChangedEvent[]): void {
+    // Last-resort net against a re-entrant update loop taking the whole tab down (see RunawayGuard).
+    // A real fleet updates at most once per simulator/PLC tick, so this never trips in normal use.
+    if (!this.runawayGuard.check()) {
+      return;
+    }
+
     const byMachineId = new Map(events.map((e) => [e.machineId, e]));
     const current = this.machinesSignal();
     let changed = false;
